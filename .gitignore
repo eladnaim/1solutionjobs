@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+dist/
+
+# Environment / Sensitive
+.env
+service-account.json
+# Match the long Firebase names
+*-firebase-adminsdk-*.json
+*_session_local.json
+facebook_cookies.json
+chrome_profile/
+
+# Logs
+*.log
+*.log-*
+
+# IDE / System
+.DS_Store
+.idea/
+.vscode/
+*.mjs
+screenshots/
+
+# Temporary / Debug
+debug_*.html
+debug_*.png
+*.png
+local-test*.js
+test*.ts
+check-*.ts
+print-*.ts
+inspect-*.ts
+desc_full.txt
