@@ -57,7 +57,8 @@ const CITY_TRANSLATIONS: Record<string, string> = {
     'holon': 'חולון',
     'bat yam': 'בת ים',
     'raanana': 'רעננה',
-    'ra\'anana': 'רעננה'
+    'ra\'anana': 'רעננה',
+    'ramat gan': 'רמת גן'
 };
 
 /**
@@ -152,16 +153,18 @@ export async function recommendGroups(jobTitle: string, jobLocation: string, job
                 const isRegion = ['center', 'north', 'south', 'jerusalem', 'shfela', 'מרכז', 'צפון', 'דרום', 'השרון', 'השפלה'].includes(lowerTag);
                 if (isRegion) return false;
 
-                // Match in Hebrew text OR translated English text OR detected city
+                // STRICT MATCH: Only match against detected/normalized location or title. NOT description (to avoid random mentions).
                 return detectedLocation.includes(lowerTag) ||
                     normalizedLocation.includes(lowerTag) ||
                     normalizedTitle.includes(lowerTag) ||
-                    normalizedDesc.includes(lowerTag) ||
                     extraCityTags.includes(lowerTag);
             });
 
             if (hasCityMatch) {
                 score += 50; // Massively prioritize city matches
+            } else if (group.location_tags.some((tag: string) => normalizedDesc.includes(tag.toLowerCase()))) {
+                // Secondary check: if it's ONLY in the description, give a small boost, not a main match
+                score += 2;
             }
 
             // Region match
@@ -333,11 +336,17 @@ export async function approvePublishRequest(
             // Post to Groups
             if (request.target_groups && request.target_groups.length > 0) {
                 for (const groupId of request.target_groups) {
-                    // Fetch group URL
-                    const groupDoc = await db.collection('groups').doc(groupId).get();
+                    // Fetch group URL - Try both collections
+                    let groupDoc = await db.collection('facebook_groups').doc(groupId).get();
+                    if (!groupDoc.exists) {
+                        groupDoc = await db.collection('groups').doc(groupId).get();
+                    }
+
                     const groupUrl = groupDoc.data()?.url;
                     if (groupUrl) {
                         await fb.publishPost(groupUrl, request.content);
+                    } else {
+                        console.warn(`[Publish Engine] ⚠️ Could not find URL for group ${groupId}`);
                     }
                 }
                 results.platforms.facebook_groups = { success: true, count: request.target_groups.length };

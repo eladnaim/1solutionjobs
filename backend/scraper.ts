@@ -283,7 +283,22 @@ export class SVTScraper {
                             return '';
                         };
 
-                        const location = finder(['מיקום המשרה', 'מיקום המשרה:']) || 'ישראל';
+                        let location = finder(['מיקום המשרה', 'מיקום', 'עיר', 'איזור', 'כתובת', 'City', 'Location']);
+                        
+                        // Proximity Fallback: If no location found via labels, look at elements near the title
+                        if (!location && titleEl) {
+                            const parent = titleEl.parentElement;
+                            if (parent) {
+                                const siblings = Array.from(parent.querySelectorAll('div, span, b'));
+                                const index = siblings.indexOf(titleEl as any);
+                                if (index !== -1 && siblings[index + 1]) {
+                                    const text = siblings[index + 1].textContent?.trim() || '';
+                                    if (text.length > 2 && text.length < 30) location = text;
+                                }
+                            }
+                        }
+                        
+                        if (!location) location = 'ישראל';
                         const company_desc = finder(['תיאור חברה', 'תיאור חברה:']);
                         let job_desc = finder(['תיאור המשרה', 'תיאור המשרה:', 'דרישות משרה', 'דרישות משרה:', 'תיאור התפקיד', 'תיאור התפקיד:']);
 

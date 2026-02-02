@@ -139,9 +139,8 @@ export class FacebookScraper {
                         await page.waitForTimeout(5000);
                     }
 
-                    // 🏠 CRITICAL STEP: Go to Home Feed to find the post box!
-                    console.log("[Facebook Engine] 🏠 Navigating to Home Feed to find post box...");
-                    await page.click('a[aria-label="Home"], a[aria-label="דף הבית"], a[href="/"]');
+                    // Try current page first before jumping home
+                    console.log("[Facebook Engine] 🔍 Checking for post box on current page...");
                     await page.waitForTimeout(3000);
 
                 } catch (e) {
@@ -186,21 +185,39 @@ export class FacebookScraper {
 
             await page.screenshot({ path: `./screenshots/pub_filled_${targetId.replace(/[^a-z0-9]/gi, '_')}.png` });
 
-            // Click Post Button
+            // 🟩 Submit Button Selectors (Enhanced for FB 2024/2025)
             const submitSelectors = [
                 'div[role="button"]:has-text("פרסם")',
                 'div[role="button"]:has-text("Post")',
                 'div[aria-label="פרסם"]',
                 'div[aria-label="Post"]',
-                'div[role="button"].x1n2onr6.x1ja2u2z' // Another specific FB class
+                'div[role="button"]:has-text("שלח")',
+                'div[role="button"]:has-text("שתף")',
+                'div[aria-label="שתף"]',
+                'div[role="button"].x1n2onr6.x1ja2u2z',
+                'div[role="button"].x78zum5.x1q0g3np.x1a02dak.x1qughib', // Blue Post Button Class
             ];
 
             let posted = false;
             for (const selector of submitSelectors) {
                 try {
-                    await page.click(selector, { timeout: 5000 });
-                    posted = true;
-                    break;
+                    const btn = page.locator(selector).first();
+                    if (await btn.isVisible({ timeout: 2000 })) {
+                        await btn.click();
+                        posted = true;
+                        break;
+                    }
+                } catch (e) { }
+            }
+
+            if (!posted) {
+                // LAST RESORT: Try to find any blue button in the dialog that looks like a submit button
+                try {
+                    const lastResort = page.locator('div[role="dialog"] div[role="button"]:is(.x1n2onr6, .x1ja2u2z)').last();
+                    if (await lastResort.isVisible({ timeout: 2000 })) {
+                        await lastResort.click();
+                        posted = true;
+                    }
                 } catch (e) { }
             }
 
