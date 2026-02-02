@@ -44,12 +44,25 @@ if (!admin.apps.length) {
             }
         }
 
-        // Standardize keys for the final credential.cert call if needed
+        // Standardize and CLEAN the credentials
+        let pk = (creds.private_key || creds.privateKey || '').trim();
+
+        // Remove accidental wrapping quotes from Vercel UI
+        if (pk.startsWith('"') && pk.endsWith('"')) pk = pk.slice(1, -1);
+        if (pk.startsWith("'") && pk.endsWith("'")) pk = pk.slice(1, -1);
+
+        // Fix newline escaping (handle both literal and escaped)
+        pk = pk.replace(/\\n/g, '\n');
+
         const finalCreds = {
             projectId: creds.project_id || creds.projectId,
             clientEmail: creds.client_email || creds.clientEmail,
-            privateKey: (creds.private_key || creds.privateKey || '').replace(/\\n/g, '\n')
+            privateKey: pk
         };
+
+        if (!finalCreds.privateKey.includes("BEGIN PRIVATE KEY")) {
+            throw new Error("Invalid Private Key format - missing header");
+        }
 
         admin.initializeApp({
             projectId: finalCreds.projectId,
