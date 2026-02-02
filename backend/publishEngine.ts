@@ -56,8 +56,6 @@ const CITY_TRANSLATIONS: Record<string, string> = {
     'modiin': 'מודיעין',
     'holon': 'חולון',
     'bat yam': 'בת ים',
-    'raanana': 'רעננה',
-    'ra\'anana': 'רעננה',
     'ramat gan': 'רמת גן'
 };
 
@@ -510,7 +508,7 @@ export async function runAutoPilotBatch(limit: number = 5) {
 
         // Filter and sort in memory to avoid index requirement in Alpha
         const sortedJobs = jobsSnapshot.docs
-            .map(d => ({ id: d.id, ...d.data() }))
+            .map(d => ({ id: d.id, ...d.data() } as any))
             .filter((j: any) => j.is_full_scrape === true)
             .sort((a: any, b: any) => {
                 const timeA = a.created_at?.seconds || 0;

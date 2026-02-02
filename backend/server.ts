@@ -25,12 +25,12 @@ app.use(express.static('public'));
 app.use('/screenshots', express.static('screenshots'));
 
 // Basic Root Route
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
     res.send('1solution jobs Intelligent HR System - API v1 is active.');
 });
 
 // SVT Status
-app.get('/api/svt-status', async (req, res) => {
+app.get('/api/svt-status', async (_req, res) => {
     try {
         const doc = await db.collection('settings').doc('svt_session_cookies').get();
         const connected = doc.exists && doc.data()?.connected === true;
@@ -42,7 +42,7 @@ app.get('/api/svt-status', async (req, res) => {
 });
 
 // Facebook Status
-app.get('/api/facebook-status', async (req, res) => {
+app.get('/api/facebook-status', async (_req, res) => {
     try {
         const doc = await db.collection('settings').doc('facebook_session_cookies').get();
         const settingsDoc = await db.collection('settings').doc('facebook').get();
@@ -61,7 +61,7 @@ app.get('/api/facebook-status', async (req, res) => {
 });
 
 // Facebook Page Settings
-app.get('/api/settings/facebook', async (req, res) => {
+app.get('/api/settings/facebook', async (_req, res) => {
     try {
         const doc = await db.collection('settings').doc('facebook').get();
         res.json({ success: true, settings: doc.exists ? doc.data() : {} });
@@ -85,7 +85,7 @@ app.post('/api/settings/facebook', async (req, res) => {
 });
 
 // Telegram Status
-app.get('/api/telegram-status', async (req, res) => {
+app.get('/api/telegram-status', async (_req, res) => {
     try {
         const doc = await db.collection('settings').doc('telegram').get();
         const connected = doc.exists && !!doc.data()?.bot_token && !!doc.data()?.chat_id;
@@ -96,7 +96,7 @@ app.get('/api/telegram-status', async (req, res) => {
 });
 
 // Telegram Settings
-app.get('/api/settings/telegram', async (req, res) => {
+app.get('/api/settings/telegram', async (_req, res) => {
     try {
         const doc = await db.collection('settings').doc('telegram').get();
         res.json({ success: true, settings: doc.exists ? doc.data() : {} });
@@ -120,7 +120,7 @@ app.post('/api/settings/telegram', async (req, res) => {
 });
 
 // SVT Login
-app.post('/api/svt-login', async (req, res) => {
+app.post('/api/svt-login', async (_req, res) => {
     try {
         const result = await svtScraper.runInteractiveLogin();
         res.json({ success: result });
@@ -130,7 +130,7 @@ app.post('/api/svt-login', async (req, res) => {
 });
 
 // Facebook Interactive Login
-app.post('/api/facebook-login', async (req, res) => {
+app.post('/api/facebook-login', async (_req, res) => {
     try {
         const result = await fbScraper.runInteractiveLogin();
         res.json({ success: true, result });
@@ -141,7 +141,7 @@ app.post('/api/facebook-login', async (req, res) => {
 });
 
 // Sync Facebook Groups
-app.post('/api/sync-groups', async (req, res) => {
+app.post('/api/sync-groups', async (_req, res) => {
     try {
         const result = await syncFacebookGroups();
         res.json(result);
@@ -213,7 +213,7 @@ app.post('/api/publish', async (req, res) => {
     }
 });
 
-app.get('/api/publish-requests', async (req, res) => {
+app.get('/api/publish-requests', async (_req, res) => {
     try {
         const snapshot = await db.collection('publish_requests')
             .orderBy('created_at', 'desc')
@@ -284,7 +284,7 @@ app.get('/api/jobs/:id', async (req, res) => {
 });
 
 // Get All Jobs (Management View)
-app.get('/api/jobs', async (req, res) => {
+app.get('/api/jobs', async (_req, res) => {
     try {
         const snapshot = await db.collection('jobs').orderBy('created_at', 'desc').get();
         const jobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -388,7 +388,7 @@ app.post('/api/candidates/veterans', async (req, res) => {
     }
 });
 
-app.get('/api/candidates', async (req, res) => {
+app.get('/api/candidates', async (_req, res) => {
     try {
         const snapshot = await db.collection('candidates').orderBy('created_at', 'desc').get();
         const candidates = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -447,7 +447,7 @@ app.post('/api/jobs/:id/regenerate', async (req, res) => {
     }
 });
 
-app.get('/api/stats', async (req, res) => {
+app.get('/api/stats', async (_req, res) => {
     try {
         const jobsSnapshot = await db.collection('jobs').get();
         const activeJobs = jobsSnapshot.size;
