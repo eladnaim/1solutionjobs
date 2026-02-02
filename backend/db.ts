@@ -10,38 +10,50 @@ if (!admin.apps.length) {
     try {
         let creds: any;
         const envServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+        const fbPrivateKey = process.env.FB_PRIVATE_KEY;
+        const fbClientEmail = process.env.FB_CLIENT_EMAIL;
+        const fbProjectId = process.env.FB_PROJECT_ID;
 
-        if (envServiceAccount) {
+        if (fbPrivateKey && fbClientEmail && fbProjectId) {
+            console.log("[Firebase] Using independent environment variables");
+            creds = {
+                projectId: fbProjectId,
+                clientEmail: fbClientEmail,
+                privateKey: fbPrivateKey.replace(/\\n/g, '\n')
+            };
+        } else if (envServiceAccount) {
+            console.log("[Firebase] Using FIREBASE_SERVICE_ACCOUNT JSON blob");
             try {
                 creds = JSON.parse(envServiceAccount);
-            } catch (pError) {
+            } catch (pError: any) {
                 console.warn("[Firebase] Initial JSON parse failed, attempting deep clean...");
-                // Fix common escaping issues in Vercel env vars
-                const cleaned = envServiceAccount
-                    .replace(/\\n/g, '\n') // Fix literal \n
-                    .replace(/\n/g, '\\n'); // Ensure newlines are escaped for JSON
-
-                // If the key is just sitting as a raw string with literal newlines, JSON.parse will fail.
-                // Vercel UI often mangles these.
+                const cleaned = envServiceAccount.replace(/\\n/g, '\n');
                 try {
                     creds = JSON.parse(cleaned);
-                } catch (e) {
-                    throw new Error(`Failed to parse Firebase credentials even after cleaning: ${pError.message}`);
+                } catch (e: any) {
+                    throw new Error(`Failed to parse Firebase credentials: ${pError.message}`);
                 }
             }
         } else {
+            console.log("[Firebase] Falling back to service-account.json file");
             const keyPath = path.resolve(process.cwd(), 'service-account.json');
-            creds = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
+            if (fs.existsSync(keyPath)) {
+                creds = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
+            } else {
+                throw new Error("No Firebase credentials found in environment or file");
+            }
         }
 
-        // Clean up the private key manually just in case
-        if (creds && creds.private_key) {
-            creds.private_key = creds.private_key.replace(/\\n/g, '\n');
-        }
+        // Standardize keys for the final credential.cert call if needed
+        const finalCreds = {
+            projectId: creds.project_id || creds.projectId,
+            clientEmail: creds.client_email || creds.clientEmail,
+            privateKey: (creds.private_key || creds.privateKey || '').replace(/\\n/g, '\n')
+        };
 
         admin.initializeApp({
-            projectId: creds.project_id || process.env.VITE_FIREBASE_PROJECT_ID || "onesolutionsystem-fac58",
-            credential: admin.credential.cert(creds)
+            projectId: finalCreds.projectId,
+            credential: admin.credential.cert(finalCreds)
         });
         console.log("[Firebase] Admin Initialized Successfully");
     } catch (error: any) {
