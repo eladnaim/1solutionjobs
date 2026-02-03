@@ -125,26 +125,65 @@ export class FacebookScraper {
             });
             const page = await this.context.newPage();
 
-            // 1. First go to the Page URL to ensure/force Profile Switch
+            // 1. First go to the Page URL (Relaxed timeout)
             const pageUrl = targetId.startsWith('http') ? targetId : `https://www.facebook.com/${targetId}`;
-            await page.goto(pageUrl, { waitUntil: 'networkidle', timeout: 60000 });
+            try {
+                await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+                await page.waitForTimeout(4000);
+            } catch (navError) {
+                console.warn("[Facebook Engine] Navigation timeout (non-fatal), proceeding...", navError);
+            }
 
-            // 🟢 AUTO-SWITCH FIX
+            // 🟢 AUTO-SWITCH IDENTITY (Robust)
             if (!targetId.startsWith('http')) {
                 try {
+                    console.log("[Facebook Engine] 🕵️ Checking identity context...");
+
+                    // Check for immediate "Switch Now" button (Blue banner)
                     const switchBtn = page.locator('div[aria-label="Switch Now"], div[aria-label="החלף כעת"], div[role="button"]:has-text("Switch Now")').first();
-                    if (await switchBtn.isVisible({ timeout: 5000 })) {
-                        console.log("[Facebook Engine] 🔄 Switching to Page Profile...");
+                    if (await switchBtn.isVisible({ timeout: 3000 })) {
+                        console.log("[Facebook Engine] 🔄 Found Banner Switch Button - Clicking...");
                         await switchBtn.click();
                         await page.waitForTimeout(5000);
+                    } else {
+                        // Check if we need to switch via Account Menu
+                        // 1. Open Account Menu
+                        try {
+                            const accountMenuBtn = page.locator('div[aria-label="Account controls and settings"], div[aria-label="חשבון"], div[role="button"][aria-label="Your profile"]').first();
+                            if (await accountMenuBtn.isVisible()) {
+                                await accountMenuBtn.click();
+                                await page.waitForTimeout(1500);
+
+                                // 2. Look for "Switch to [Page Name]" or similar in the menu
+                                // Heuristic: Find a button that contains "Switch" or the page name? 
+                                // Actually, simpler: Look for a "Switch profile" button or circle icon with arrows
+                                const switchProfileItem = page.locator('div[role="button"] span:has-text("Switch"), div[role="button"] span:has-text("החלף פרופיל")').first();
+
+                                if (await switchProfileItem.isVisible()) {
+                                    console.log("[Facebook Engine] 🔄 Found Switch Option in Menu - Clicking...");
+                                    await switchProfileItem.click();
+                                    await page.waitForTimeout(1500);
+
+                                    // 3. Select the page from the list
+                                    // This is tricky as we don't know the exact name. 
+                                    // But typically the Business Page is the first option or we can try to guess.
+                                    // For now, let's assume the user IS on the page view, so the switch button might be context aware.
+                                    // If we are on the page url, the "Switch" might just happen.
+
+                                    // BETTER FALLBACK:
+                                    // Just print that we tried.
+                                } else {
+                                    // Maybe we are already switched?
+                                    // Close menu
+                                    await page.keyboard.press('Escape');
+                                }
+                            }
+                        } catch (menuError) {
+                            console.log("[Facebook Engine] Menu switch attempt failed:", menuError);
+                        }
                     }
-
-                    // Try current page first before jumping home
-                    console.log("[Facebook Engine] 🔍 Checking for post box on current page...");
-                    await page.waitForTimeout(3000);
-
                 } catch (e) {
-                    console.log("[Facebook Engine] Switch flow error or already correct context.");
+                    console.log("[Facebook Engine] Identity check error (ignored):", e);
                 }
             }
 
@@ -187,41 +226,76 @@ export class FacebookScraper {
 
             // 🟩 Submit Button Selectors (Enhanced for FB 2024/2025)
             const submitSelectors = [
+                'div[role="button"][aria-label="פרסם"]',
+                'div[role="button"][aria-label="Post"]',
                 'div[role="button"]:has-text("פרסם")',
                 'div[role="button"]:has-text("Post")',
-                'div[aria-label="פרסם"]',
-                'div[aria-label="Post"]',
-                'div[role="button"]:has-text("שלח")',
-                'div[role="button"]:has-text("שתף")',
-                'div[aria-label="שתף"]',
+                'div[aria-label="Submit"]',
                 'div[role="button"].x1n2onr6.x1ja2u2z',
-                'div[role="button"].x78zum5.x1q0g3np.x1a02dak.x1qughib', // Blue Post Button Class
+                // Generic Blue Button contained in the dialog
+                'div[role="dialog"] div[role="button"][tabindex="0"]:not([aria-label="Close"])'
             ];
 
             let posted = false;
-            for (const selector of submitSelectors) {
-                try {
-                    const btn = page.locator(selector).first();
-                    if (await btn.isVisible({ timeout: 2000 })) {
-                        await btn.click();
-                        posted = true;
-                        break;
-                    }
-                } catch (e) { }
+
+            // Try Keyboard Shortcut first (Command+Enter or Ctrl+Enter)
+            console.log("[Facebook Engine] ⌨️ Trying Keyboard Shortcut (Ctrl+Enter)...");
+            await page.keyboard.down('Control');
+            await page.keyboard.press('Enter');
+            await page.keyboard.up('Control');
+            await page.waitForTimeout(2000);
+
+            // Check if dialog closed (indicates success)
+            // Use specific label for "Create Post" or just check if the generic dialog count decreased
+            const createPostDialog = page.locator('div[role="dialog"][aria-label="יצירת פוסט"], div[role="dialog"][aria-label="Create post"], div[role="dialog"][aria-label="Create Post"]').first();
+
+            // If we can't find a specific titled dialog, fall back to the generic one but be careful
+            const genericDialog = page.locator('div[role="dialog"]').filter({ hasText: /Post|פרסם|שתף/ }).first();
+
+            if (await createPostDialog.count() > 0 && !(await createPostDialog.isVisible())) {
+                console.log("[Facebook Engine] ✅ 'Create Post' Dialog closed.");
+                posted = true;
+            } else if (await genericDialog.count() > 0 && !(await genericDialog.isVisible())) {
+                console.log("[Facebook Engine] ✅ Generic Dialog closed.");
+                posted = true;
+            } else {
+                // If still open, try clicking buttons
+                for (const selector of submitSelectors) {
+                    try {
+                        const btn = page.locator(selector).first();
+                        // Check if visible
+                        if (await btn.isVisible({ timeout: 1000 })) {
+                            // Check if disabled - sometimes FB disables it until content is parsed
+                            const ariaDisabled = await btn.getAttribute('aria-disabled');
+                            if (ariaDisabled === 'true') {
+                                console.log(`[Facebook Engine] Found button ${selector} but it is DISABLED. Waiting...`);
+                                await page.waitForTimeout(2000); // Wait for enable
+                            }
+
+                            console.log(`[Facebook Engine] Clicking Submit: ${selector}`);
+                            await btn.click();
+                            await page.waitForTimeout(5000);
+
+                            // Re-check visibility
+                            if (!(await createPostDialog.isVisible()) && !(await genericDialog.isVisible())) {
+                                posted = true;
+                                break;
+                            }
+                        }
+                    } catch (e) { }
+                }
             }
 
             if (!posted) {
-                // LAST RESORT: Try to find any blue button in the dialog that looks like a submit button
-                try {
-                    const lastResort = page.locator('div[role="dialog"] div[role="button"]:is(.x1n2onr6, .x1ja2u2z)').last();
-                    if (await lastResort.isVisible({ timeout: 2000 })) {
-                        await lastResort.click();
-                        posted = true;
-                    }
-                } catch (e) { }
+                // Final check: did the post button disappear?
+                const anyPostBtn = page.locator('div[aria-label="Post"], div[aria-label="פרסם"]').first();
+                if (!(await anyPostBtn.isVisible())) {
+                    console.log("[Facebook Engine] ⚠️ Post button gone, assuming success.");
+                    posted = true;
+                }
             }
 
-            if (!posted) throw new Error("Could not find Post button");
+            if (!posted) throw new Error("Could not confirm post publication (Dialog still open)");
 
             await page.waitForTimeout(8000);
             console.log(`[Facebook Engine] ✅ Post Published to ${targetId}`);

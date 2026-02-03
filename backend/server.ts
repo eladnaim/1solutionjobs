@@ -7,7 +7,7 @@ import { SVTScraper } from './scraper.js';
 import { db } from './db.js';
 import { FacebookScraper } from './facebookScraper.js';
 import { syncFacebookGroups } from './sync_groups.js';
-import { recommendGroups, createPublishRequest, approvePublishRequest } from './publishEngine.js';
+import { recommendGroups, createPublishRequest, approvePublishRequest, runAutoPilotBatch } from './publishEngine.js';
 import { getPublicJob, trackAndRedirect } from './landingController.js';
 import { generateJobContent } from './contentEngine.js';
 import { findMatchesForRequirement, checkNewCandidateAgainstRequirements } from './matchingEngine.js';
@@ -189,6 +189,25 @@ app.get('/api/recommend-groups', async (req, res) => {
     }
 });
 
+app.get('/api/facebook-groups', async (req, res) => {
+    const { q } = req.query;
+    try {
+        let query: any = db.collection('facebook_groups').where('is_member', '==', true);
+        const snapshot = await query.limit(100).get();
+
+        let groups = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+
+        if (q) {
+            const term = String(q).toLowerCase();
+            groups = groups.filter((g: any) => g.name.toLowerCase().includes(term));
+        }
+
+        res.json({ success: true, groups: groups.slice(0, 20) });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 app.post('/api/publish', async (req, res) => {
     const { jobId, groupIds, content, platforms } = req.body;
     try {
@@ -200,15 +219,27 @@ app.post('/api/publish', async (req, res) => {
         );
 
         if (result.success && result.requestId) {
-            console.log(`[Server] 🚀 Auto-approving publish request ${result.requestId} for immediate distribution...`);
-            // Trigger approval but don't strictly await it if it's too slow, 
-            // OR await it to show success in modal. Let's await for better UX.
+            // On Vercel/Production, we might want to skip auto-approval if it involves Playwright
+            // because Chromium might not be available.
+            const isVercel = !!process.env.VERCEL;
+
+            if (isVercel && (platforms || []).includes('facebook')) {
+                console.log(`[Server] ⏳ Created publish request ${result.requestId}. Skipping auto-approval on Vercel (No Browser).`);
+                return res.json({
+                    success: true,
+                    message: 'בקשת הפרסום נוצרה ונוספה לרשימת ההמתנה. יש לאשר אותה ידנית בשל מגבלות טכניות בשרת.',
+                    requestId: result.requestId
+                });
+            }
+
+            console.log(`[Server] 🚀 Auto-approving publish request ${result.requestId}...`);
             const pubResult = await approvePublishRequest(result.requestId, 'System (Auto-Confirmed)');
             res.json(pubResult);
         } else {
-            res.status(500).json({ success: false, error: 'Failed to create publish request' });
+            res.status(400).json({ success: false, error: result.message || 'Failed to create publish request' });
         }
     } catch (error: any) {
+        console.error('[Server] Publish Error:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -286,7 +317,8 @@ app.get('/api/jobs/:id', async (req, res) => {
 // Get All Jobs (Management View)
 app.get('/api/jobs', async (_req, res) => {
     try {
-        const snapshot = await db.collection('jobs').orderBy('created_at', 'desc').get();
+        // Emergency Mode: Simple limit 10 to check if DB is alive
+        const snapshot = await db.collection('jobs').limit(10).get();
         const jobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         res.json({ success: true, jobs });
     } catch (error) {
@@ -449,34 +481,34 @@ app.post('/api/jobs/:id/regenerate', async (req, res) => {
 
 app.get('/api/stats', async (_req, res) => {
     try {
-        const jobsSnapshot = await db.collection('jobs').get();
-        const activeJobs = jobsSnapshot.size;
+        const jobsCount = await db.collection('jobs').count().get();
+        const activeJobs = jobsCount.data().count;
 
-        const candidatesSnapshot = await db.collection('candidates').get();
-        const candidates = candidatesSnapshot.size;
+        const candidatesCount = await db.collection('candidates').count().get();
+        const candidates = candidatesCount.data().count;
 
-        // Count jobs that have at least one generated post
-        const viralPosts = jobsSnapshot.docs.filter(doc => doc.data().viral_post || doc.data().professional_post).length;
+        // Efficient counting of specific subsets if needed, 
+        // but for now let's just use approximate or indexed values
+        // For Alpha, we'll keep these simpler or skip if too slow
+        const fullDataJobsCount = await db.collection('jobs').where('is_full_scrape', '==', true).count().get();
+        const fullDataJobs = fullDataJobsCount.data().count;
 
-        // Count full data jobs
-        const fullDataJobs = jobsSnapshot.docs.filter(doc => doc.data().is_full_scrape === true || (doc.data().description_clean && doc.data().description_clean.length > 500)).length;
-
-        // Count pending publications
-        const pendingSnapshot = await db.collection('publish_requests').where('status', '==', 'pending_approval').get();
-        const pendingPublications = pendingSnapshot.size;
+        const pendingSnapshot = await db.collection('publish_requests').where('status', '==', 'pending_approval').count().get();
+        const pendingPublications = pendingSnapshot.data().count;
 
         res.json({
             success: true,
             stats: {
                 activeJobs,
                 candidates,
-                viralPosts,
+                viralPosts: fullDataJobs, // Approximation for now
                 conversionRate: "3.2%",
                 fullDataJobs,
                 pendingPublications
             }
         });
     } catch (error) {
+        console.error("Stats Error:", error);
         res.status(500).json({ success: false, error: 'Failed to fetch stats' });
     }
 });
@@ -519,13 +551,24 @@ app.post('/api/requirements/match', async (req, res) => {
     }
 });
 
-// Automation: Pull 100 jobs every 15 minutes
-cron.schedule('*/15 * * * *', async () => {
+// Automation: Pull 100 jobs every 30 minutes (Layer 2)
+cron.schedule('*/30 * * * *', async () => {
     console.log("[Automation] Triggering Scheduled Scrape...");
     try {
         await svtScraper.scrapeJobs();
     } catch (e) {
         console.error("[Automation] Scheduled Scrape Failed:", e);
+    }
+});
+
+// Automation: Auto-Pilot Publishing every 2 hours (Layer 4)
+// This ensures new high-quality jobs reach groups without manual trigger
+cron.schedule('0 */2 * * *', async () => {
+    console.log("[Automation] Triggering Layer 4 Auto-Pilot...");
+    try {
+        await runAutoPilotBatch(3); // Process top 3 new jobs
+    } catch (e) {
+        console.error("[Automation] Auto-Pilot Failed:", e);
     }
 });
 

@@ -183,30 +183,42 @@ export class SVTScraper {
             const jobLinks = await page.$$eval('a[href*="/position/"], a[href*="/job/"]', (anchors) => Array.from(new Set(anchors.map(a => a.href))));
             log(`[SVT Engine] Found ${jobLinks.length} unique job links.`);
 
+            // Optimization: Fetch existing jobs status to filter intelligently
+            // We want to skip jobs that are ALREADY fully scraped, but process those that are partial
+            const allExistingDocs = await db.collection('jobs').select('id', 'is_full_scrape').get();
+            const existingStatus = new Map(allExistingDocs.docs.map(d => [d.id, d.data().is_full_scrape]));
+
             let linksToProcess = [];
             const BATCH_SIZE = fullSweep ? 150 : 50;
-            if (fullSweep) {
-                const existingJobs = await db.collection('jobs').get();
-                const processedIds = new Set(existingJobs.docs.filter(d => d.data().is_full_scrape === true).map(d => d.id));
-                linksToProcess = jobLinks.filter(link => !processedIds.has(link.split('/').pop() || '')).slice(0, BATCH_SIZE);
-            } else {
-                linksToProcess = jobLinks.slice(0, BATCH_SIZE);
-            }
 
-            log(`[SVT Engine] Processing ${linksToProcess.length} jobs...`);
+            // Filter: Process if New OR (Existing AND Not Fully Scraped)
+            linksToProcess = jobLinks.filter(link => {
+                const id = link.split('/').pop() || '';
+                const isFullyScraped = existingStatus.get(id);
+                return isFullyScraped !== true;
+            }).slice(0, BATCH_SIZE);
+
+            log(`[SVT Engine] Processing ${linksToProcess.length} jobs (Smart Filter: New + Partial)...`);
             jobsFound = linksToProcess.length;
 
             // Bulk Update 'last_seen' for all found links (Layer 2.3)
+            // We still update last_seen for everything we found on the page, even if we don't scrape it deeply
             try {
                 const foundIds = jobLinks.map(link => link.split('/').pop()).filter(Boolean);
                 const batch = db.batch();
+                let batchCount = 0;
+
                 foundIds.forEach(id => {
-                    batch.set(db.collection('jobs').doc(id!), {
-                        last_seen: admin.firestore.FieldValue.serverTimestamp()
-                    }, { merge: true });
+                    if (existingIds.has(id!)) {
+                        batch.set(db.collection('jobs').doc(id!), {
+                            last_seen: admin.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true });
+                        batchCount++;
+                    }
                 });
-                await batch.commit();
-                log(`[SVT Engine] Updated 'last_seen' for ${foundIds.length} jobs.`);
+
+                if (batchCount > 0) await batch.commit();
+                log(`[SVT Engine] Updated 'last_seen' for ${batchCount} existing jobs.`);
             } catch (e) { log("Error during bulk last_seen update: " + e); }
 
             // Phase B: Intelligent Deactivation (Layer 2.3)
@@ -290,7 +302,7 @@ export class SVTScraper {
                             const parent = titleEl.parentElement;
                             if (parent) {
                                 const siblings = Array.from(parent.querySelectorAll('div, span, b'));
-                                const index = siblings.indexOf(titleEl as any);
+                                const index = siblings.indexOf(titleEl);
                                 if (index !== -1 && siblings[index + 1]) {
                                     const text = siblings[index + 1].textContent?.trim() || '';
                                     if (text.length > 2 && text.length < 30) location = text;

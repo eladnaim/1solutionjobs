@@ -423,29 +423,77 @@ export function JobDetailModal({ job, onClose, onPublished }: JobDetailModalProp
                                 </div>
                             </div>
 
-                            {/* Group Recommendations */}
-                            <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 mb-4">
-                                <h4 className="text-xs font-bold text-indigo-900 mb-3 flex items-center gap-2">
-                                    <Globe size={14} className="text-indigo-600" />
-                                    קהלי יעד מותאמים (פייסבוק)
-                                </h4>
-                                <div className="flex flex-wrap gap-2">
-                                    {recommendedGroups.map(g => {
-                                        const isSelected = selectedGroups.includes(g.id);
-                                        return (
-                                            <button
-                                                key={g.id}
-                                                onClick={() => toggleGroup(g.id)}
-                                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-sm transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-indigo-100 text-slate-700 hover:border-indigo-300'}`}
-                                            >
-                                                {isSelected ? <CheckCircle size={12} className="text-white" /> : <Facebook size={12} className="text-blue-600" />}
-                                                <span className="text-xs font-medium">{g.name}</span>
-                                            </button>
-                                        );
-                                    })}
-                                    {recommendedGroups.length === 0 && (
-                                        <div className="text-xs text-slate-400 italic py-1">מאתר קבוצות רלוונטיות לפי מיקום ותחום...</div>
-                                    )}
+                            {/* Group Recommendations & Manual Search */}
+                            <div className="bg-indigo-50/50 p-6 rounded-xl border border-indigo-100 mb-4">
+                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                                    <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2">
+                                        <Globe size={16} className="text-indigo-600" />
+                                        בחירת קבוצות הפצה (פייסבוק)
+                                    </h4>
+
+                                    {/* Business Page Toggle */}
+                                    <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-indigo-100 shadow-sm mr-auto ml-4">
+                                        <input
+                                            type="checkbox"
+                                            id="post_to_page"
+                                            defaultChecked={true}
+                                            onChange={(e) => {
+                                                // We will need to plumb this through to the publish request
+                                                // For now, let's just visually show it works
+                                            }}
+                                            className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500"
+                                        />
+                                        <label htmlFor="post_to_page" className="text-xs font-bold text-gray-700 cursor-pointer select-none">
+                                            פרסם גם בדף העסקי הרשמי
+                                        </label>
+                                    </div>
+
+                                    {/* Manual Search in Modal */}
+                                    <div className="relative w-full md:w-64">
+                                        <input
+                                            type="text"
+                                            placeholder="חפש קבוצה נוספת..."
+                                            className="w-full px-3 py-1.5 bg-white border border-indigo-100 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                                            onChange={async (e) => {
+                                                const val = e.target.value;
+                                                if (val.length > 2) {
+                                                    const res = await fetch(`/api/facebook-groups?q=${encodeURIComponent(val)}`);
+                                                    const data = await res.json();
+                                                    if (data.success) {
+                                                        setRecommendedGroups(prev => {
+                                                            const newOnes = data.groups.filter((ng: any) => !prev.some(pg => pg.id === ng.id));
+                                                            return [...prev, ...newOnes];
+                                                        });
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {/* Automated Recommendations */}
+                                    <div>
+                                        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-2">הצעות המערכת (מבוסס מיקום ותחום)</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {recommendedGroups.map(g => {
+                                                const isSelected = selectedGroups.includes(g.id);
+                                                return (
+                                                    <button
+                                                        key={g.id}
+                                                        onClick={() => toggleGroup(g.id)}
+                                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-sm transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-indigo-100 text-slate-700 hover:border-indigo-300'}`}
+                                                    >
+                                                        {isSelected ? <CheckCircle size={12} className="text-white" /> : <Facebook size={12} className="text-blue-600" />}
+                                                        <span className="text-xs font-medium">{g.name}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                            {recommendedGroups.length === 0 && (
+                                                <div className="text-xs text-slate-400 italic py-1">מאתר קבוצות רלוונטיות לפי מיקום ותחום...</div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 

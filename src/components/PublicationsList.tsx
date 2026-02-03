@@ -138,16 +138,46 @@ export function PublicationsList() {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {history.map(req => (
-                                <tr key={req.id} className="hover:bg-slate-50/50">
-                                    <td className="p-4 font-medium text-slate-700">{req.job_title}</td>
-                                    <td className="p-4">
-                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${req.status === 'published' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                                            {req.status === 'published' ? <CheckCircle size={12} /> : <AlertTriangle size={12} />}
-                                            {req.status === 'published' ? 'פורסם בהצלחה' : 'נכשל'}
-                                        </span>
+                                <tr key={req.id} className="hover:bg-slate-50/50 group">
+                                    <td className="p-4 font-medium text-slate-700">
+                                        {req.job_title}
+                                        <div className="text-[10px] text-slate-400 font-mono mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            ID: {req.id}
+                                        </div>
                                     </td>
-                                    <td className="p-4 text-slate-400">
-                                        {req.created_at?.seconds ? new Date(req.created_at.seconds * 1000).toLocaleDateString('he-IL') : 'היום'}
+                                    <td className="p-4">
+                                        <div className="flex flex-col gap-1">
+                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold w-fit ${req.status === 'published' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                                {req.status === 'published' ? <CheckCircle size={12} /> : <AlertTriangle size={12} />}
+                                                {req.status === 'published' ? 'פורסם' : 'נכשל'}
+                                            </span>
+                                            {/* Detailed Breakdown */}
+                                            {req.results && (
+                                                <div className="text-[10px] space-y-1 mt-1">
+                                                    {req.results.facebook_page && (
+                                                        <div className={`flex items-center gap-1 ${req.results.facebook_page.success ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                            <Facebook size={10} />
+                                                            Page: {req.results.facebook_page.success ? 'OK' : 'Fail'}
+                                                        </div>
+                                                    )}
+                                                    {req.results.facebook_groups && (
+                                                        <div className={`flex items-center gap-1 ${req.results.facebook_groups.success ? 'text-emerald-600' : 'text-orange-500'}`}>
+                                                            <Facebook size={10} />
+                                                            Groups: {req.results.facebook_groups.count || 0}
+                                                        </div>
+                                                    )}
+                                                    {req.results.telegram && (
+                                                        <div className={`flex items-center gap-1 ${req.results.telegram.success ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                            <TelegramIcon size={10} />
+                                                            TG: {req.results.telegram.success ? 'OK' : req.results.telegram.error || 'Fail'}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="p-4 text-slate-400 text-xs">
+                                        {req.created_at?.seconds ? new Date(req.created_at.seconds * 1000).toLocaleString('he-IL') : 'היום'}
                                     </td>
                                     <td className="p-4">
                                         <div className="flex gap-1">

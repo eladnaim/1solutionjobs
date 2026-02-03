@@ -36,174 +36,101 @@ export function cleanTitle(title?: string): string {
         .trim();
 }
 
-const CITY_TRANSLATIONS: Record<string, string> = {
-    'raanana': 'רעננה',
-    'ra\'anana': 'רעננה',
-    'tel aviv': 'תל אביב',
-    'herzliya': 'הרצליה',
-    'petah tikva': 'פתח תקווה',
-    'rishon lezion': 'ראשון לציון',
-    'ashdod': 'אשדוד',
-    'ashkelon': 'אשקלון',
-    'beersheba': 'באר שבע',
-    'beer sheva': 'באר שבע',
-    'jerusalem': 'ירושלים',
-    'haifa': 'חיפה',
-    'netanya': 'נתניה',
-    'rehovot': 'רחובות',
-    'lod': 'לוד',
-    'ramla': 'רמלה',
-    'modiin': 'מודיעין',
-    'holon': 'חולון',
-    'bat yam': 'בת ים',
-    'ramat gan': 'רמת גן'
+const ALL_ISRAELI_CITIES = [
+    'תל אביב', 'ירושלים', 'חיפה', 'נתניה', 'באר שבע', 'פתח תקווה', 'ראשון לציון', 'אשדוד', 'חולון', 'בני ברק', 'רמת גן', 'רחובות', 'אשקלון', 'בת ים', 'בית שמש', 'כפר סבא', 'הרצליה', 'חדרה', 'מודיעין', 'רעננה', 'לוד', 'רמלה', 'נהריה', 'עכו', 'כרמיאל', 'טבריה', 'עפולה', 'נצרת', 'קרית גת', 'קרית אתא', 'קרית מוצקין', 'קרית ים', 'קרית ביאליק', 'מעלה אדומים', 'הוד השרון', 'גבעתיים', 'רמת השרון', 'נס ציונה', 'אלעד', 'אילת', 'חריש', 'יבנה', 'אור יהודה', 'מגדל העמק', 'צפת', 'נשר', 'ערד', 'קרית שמונה', 'שדרות', 'נתיבות', 'אופקים'
+];
+const ISRAELI_REGIONS: Record<string, string[]> = {
+    'מרכז': ['תל אביב', 'רמת גן', 'גבעתיים', 'פתח תקווה', 'חולון', 'בת ים', 'ראשון לציון', 'בני ברק', 'אלעד'],
+    'שרון': ['נתניה', 'כפר סבא', 'רעננה', 'הוד השרון', 'הרצליה', 'רמת השרון', 'חדרה', 'חריש'],
+    'Hasharon': ['נתניה', 'כפר סבא', 'רעננה', 'הוד השרון', 'הרצליה', 'רמת השרון', 'חדרה', 'חריש'],
+    'דרום': ['באר שבע', 'אשדוד', 'אשקלון', 'קרית גת', 'נתיבות', 'שדרות', 'אופקים', 'ערד', 'אילת'],
+    'צפון': ['חיפה', 'קריות', 'נהריה', 'עכו', 'כרמיאל', 'טבריה', 'עפולה', 'נצרת', 'צפת', 'קרית שמונה'],
+    'ירושלים': ['ירושלים', 'בית שמש', 'מעלה אדומים', 'מבשרת'],
+    'שפלה': ['רחובות', 'נס ציונה', 'לוד', 'רמלה', 'יבנה', 'מודיעין']
 };
 
-/**
- * recommendGroups
- * Scans the 'groups' collection and returns the most relevant groups
- * for a specific job title and location.
- */
 export async function recommendGroups(jobTitle: string, jobLocation: string, jobDescription: string = ''): Promise<RecommendedGroup[]> {
-    console.log(`[Publish Engine] Finding groups for: ${jobTitle} in ${jobLocation}`);
+    console.log(`[Publish Engine] 🧠 Smart matching for: ${jobTitle} in ${jobLocation}`);
 
-    // Fetch from the NEW synced collection (facebook_groups)
     let snapshot = await db.collection('facebook_groups').where('is_member', '==', true).get();
+    if (snapshot.empty) snapshot = await db.collection('groups').where('is_member', '==', true).get();
 
-    if (snapshot.empty) {
-        snapshot = await db.collection('groups').where('is_member', '==', true).get();
-    }
+    if (snapshot.empty) return [];
 
-    if (snapshot.empty) {
-        console.warn("[Publish Engine] No groups found in DB.");
-        return [];
-    }
+    const normalizedTitle = jobTitle.toLowerCase();
+    const normalizedLocation = jobLocation.replace('ישראל', '').trim();
+    const normalizedDesc = jobDescription.toLowerCase();
 
-    const relevantGroups: any[] = [];
+    // Identify ALL cities mentioned in the job (Multi-city support)
+    const jobCities = ALL_ISRAELI_CITIES.filter(c => normalizedLocation.includes(c) || normalizedTitle.includes(c));
+    if (jobCities.length === 0) jobCities.push(normalizedLocation);
 
-    const normalizedTitle = jobTitle.toLowerCase().trim();
-    const normalizedLocation = jobLocation.toLowerCase().trim();
-    const normalizedDesc = jobDescription.toLowerCase().trim();
+    // Identify ALL regions mentioned in the job
+    const jobRegions = Object.keys(ISRAELI_REGIONS).filter(r =>
+        normalizedLocation.includes(r) ||
+        normalizedTitle.includes(r) ||
+        jobCities.some(city => ISRAELI_REGIONS[r].includes(city))
+    );
 
-    // Israel major cities keywords for deep scanning
-    const REGION_MAPPING: Record<string, string> = {
-        'באר שבע': 'south', 'אשדוד': 'south', 'אשקלון': 'south', 'נתיבות': 'south', 'שדרות': 'south', 'רעים': 'south', 'אופקים': 'south', 'ערד': 'south', 'דימונה': 'south',
-        'תל אביב': 'center', 'רמת גן': 'center', 'גבעתיים': 'center', 'פתח תקווה': 'center', 'חולון': 'center', 'בת ים': 'center', 'רעננה': 'center', 'כפר סבא': 'center', 'הרצליה': 'center', 'נתניה': 'center',
-        'חיפה': 'north', 'קריות': 'north', 'נהריה': 'north', 'עכו': 'north', 'טבריה': 'north', 'עפולה': 'north', 'נצרת': 'north',
-        'ירושלים': 'jerusalem', 'בית שמש': 'jerusalem', 'מודיעין': 'center',
-        'רחובות': 'shfela', 'נס ציונה': 'shfela', 'לוד': 'shfela', 'רמלה': 'shfela'
-    };
-    const HEBREW_CITIES = Object.keys(REGION_MAPPING);
+    const results: any[] = [];
 
-    // Try to find Hebrew equivalents for English city names found in text
-    const extraCityTags: string[] = [];
-    for (const [eng, heb] of Object.entries(CITY_TRANSLATIONS)) {
-        if (normalizedTitle.includes(eng) || normalizedLocation.includes(eng) || normalizedDesc.includes(eng)) {
-            extraCityTags.push(heb);
-        }
-    }
-
-    // IF location is generic, try to find a city name in the title or description
-    let detectedLocation = normalizedLocation;
-    let detectedRegion = '';
-
-    const isGenericLocation = !normalizedLocation ||
-        normalizedLocation === 'ישראל' ||
-        normalizedLocation === 'מרכז' ||
-        normalizedLocation === 'צפון' ||
-        normalizedLocation === 'דרום' ||
-        normalizedLocation === 'לבדיקה...';
-
-    if (isGenericLocation) {
-        for (const city of HEBREW_CITIES) {
-            const cityPattern = new RegExp(`(\\s|^|[ב|מ])${city}(\\s|$|[\\?\\!\\,.])`, 'i');
-            if (cityPattern.test(normalizedTitle) || cityPattern.test(normalizedDesc)) {
-                detectedLocation = city;
-                detectedRegion = REGION_MAPPING[city];
-                console.log(`[Publish Engine] 📍 Detected specific location from text: ${city} (${detectedRegion})`);
-                break;
-            }
-        }
-    }
-
-    snapshot.forEach(doc => {
+    snapshot.docs.forEach(doc => {
         const group = doc.data();
+        const groupName = (group.name || '').toLowerCase();
+        const groupTags = (group.location_tags || []).map((t: string) => t.toLowerCase());
+        const groupRegion = (group.region || 'general').toLowerCase();
         let score = 0;
 
-        // Skip non-group items (profiles, personal names, etc.)
-        const nameKeywords = ['דרושים', 'עבודה', 'משרות', 'jobs', 'work', 'הייטק', 'ביטחון', 'קריירה'];
-        const lowerName = group.name ? group.name.toLowerCase() : '';
-        const isJobGroup = lowerName && nameKeywords.some(k => lowerName.includes(k));
+        // --- RULE 1: STRICT GEOGRAPHIC FILTERING (Multi-city & Region aware) ---
+        const groupCitiesFound = ALL_ISRAELI_CITIES.filter(c => groupName.includes(c) || groupTags.includes(c.toLowerCase()));
+        const groupRegionsFound = Object.keys(ISRAELI_REGIONS).filter(r => groupName.includes(r) || r.toLowerCase() === groupRegion);
 
-        // Filter out Facebook notifications and scraping garbage
-        const isGarbage = lowerName.includes('לא נקראו') ||
-            lowerName.includes('תויגת על ידי') ||
-            lowerName.includes('סמן כנקרא') ||
-            /^\d+\s+(דקות|שעות)/.test(lowerName) || // Matches "X minutes/hours" at start
-            /\d+\s+(דקות|שעות)$/.test(lowerName);    // Matches "X minutes/hours" at end
-
-        if (!isJobGroup || isGarbage) return;
-
-        // 1. Exact City Matching (Priority #1)
-        if (group.location_tags && Array.isArray(group.location_tags)) {
-            const hasCityMatch = group.location_tags.some((tag: string) => {
-                const lowerTag = tag.toLowerCase();
-                const isRegion = ['center', 'north', 'south', 'jerusalem', 'shfela', 'מרכז', 'צפון', 'דרום', 'השרון', 'השפלה'].includes(lowerTag);
-                if (isRegion) return false;
-
-                // STRICT MATCH: Only match against detected/normalized location or title. NOT description (to avoid random mentions).
-                return detectedLocation.includes(lowerTag) ||
-                    normalizedLocation.includes(lowerTag) ||
-                    normalizedTitle.includes(lowerTag) ||
-                    extraCityTags.includes(lowerTag);
-            });
-
+        if (groupCitiesFound.length > 0) {
+            const hasCityMatch = groupCitiesFound.some(gc => jobCities.some(jc => jc.includes(gc) || gc.includes(jc)));
             if (hasCityMatch) {
-                score += 50; // Massively prioritize city matches
-            } else if (group.location_tags.some((tag: string) => normalizedDesc.includes(tag.toLowerCase()))) {
-                // Secondary check: if it's ONLY in the description, give a small boost, not a main match
-                score += 2;
-            }
-
-            // Region match
-            const hasRegionMatch = (group.region && (
-                detectedRegion === group.region ||
-                detectedLocation.includes(group.region) ||
-                normalizedLocation.includes(group.region) ||
-                normalizedTitle.includes(group.region) ||
-                normalizedDesc.includes(group.region) ||
-                group.location_tags.some((tag: string) => detectedLocation.includes(tag) || normalizedLocation.includes(tag) || normalizedTitle.includes(tag) || normalizedDesc.includes(tag))
-            ));
-
-            if (hasRegionMatch) {
-                score += 10; // Boost regional matches
+                score += 100;
+            } else {
+                // Penalize if the group targets a DIFFERENT city exclusively
+                const isGeneral = groupName.includes('כל הארץ') || groupName.includes('ארצי') || groupRegion === 'general';
+                if (!isGeneral) {
+                    score -= 500;
+                }
             }
         }
 
-        // 2. Keyword Matching (Title/Role)
-        if (group.keywords && Array.isArray(group.keywords)) {
-            if (group.keywords.some((k: string) => normalizedTitle.includes(k.toLowerCase()))) {
-                score += 8;
+        // Region match boost
+        const hasRegionMatch = groupRegionsFound.some(gr => jobRegions.includes(gr));
+        if (hasRegionMatch) score += 40;
+
+        // General fallback for all country groups
+        if (groupName.includes('כל הארץ') || groupName.includes('ארצי') || groupRegion === 'general') score += 10;
+
+        // --- RULE 2: INDUSTRY/DOMAIN MATCHING ---
+        const industryKeywords: Record<string, string[]> = {
+            'security': ['אבטחה', 'ביטחון', 'שומר', 'סייר', 'מוקד', 'קב"ט', 'ביטחוני'],
+            'drivers': ['נהג', 'הובלה', 'תובלה', 'משאית', 'רכב', 'שליח', 'הפצה', 'לוגיסטיקה'],
+            'tech': ['הייטק', 'פיתוח', 'תוכנה', 'QA', 'הנדסה', 'דיגיטל', 'hi-tech', 'tech', 'מתכנת', 'סייבר'],
+            'industry': ['ייצור', 'מפעל', 'טכנאי', 'בטיחות', 'תעשייה', 'בניה', 'חשמלאי', 'רתך', 'מכונאי'],
+            'sales': ['מכירות', 'Sales', 'אנשי מכירות', 'נציג מכירות', 'טלמרקטינג', 'פיתוח עסקי'],
+            'marketing': ['שיווק', 'מרקטינג', 'Marketing', 'PPC', 'SEO', 'קריאייטיב', 'תוכן'],
+            'hr': ['משאבי אנוש', 'גיוס', 'HR', 'השמה', 'רכז', 'רכזת גיוס'],
+            'service': ['שירות', 'שירות לקוחות', 'נציג שירות', 'תמיכה', 'מוקד שירות'],
+            'office': ['מזכירות', 'מנהלה', 'אדמיניסטרציה', 'פקיד', 'פקידה', 'משרד']
+        };
+
+        for (const [_, keywords] of Object.entries(industryKeywords)) {
+            const hasJobKeyword = keywords.some(k => normalizedTitle.includes(k) || normalizedDesc.includes(k));
+            const hasGroupKeyword = keywords.some(k => groupName.includes(k));
+
+            if (hasJobKeyword && hasGroupKeyword) {
+                score += 30;
             }
-            if (group.keywords.includes('all') || group.keywords.includes('general')) {
-                score += 1;
-            }
-        } else {
-            score += 1;
         }
 
-        // 3. Name matching (Fallback)
-        const cleanGroupName = group.name.replace('דרושים', '').replace('ב-', '').replace('בי-', '').trim();
-        if (group.name && (
-            normalizedLocation.includes(cleanGroupName) ||
-            normalizedTitle.includes(cleanGroupName) ||
-            normalizedDesc.includes(cleanGroupName)
-        )) {
-            score += 10;
-        }
+        if (groupName.includes('דרושים') || groupName.includes('עבודה')) score += 5;
 
-        if (score >= 1) {
-            relevantGroups.push({
+        if (score > 10) {
+            results.push({
                 id: doc.id,
                 name: group.name,
                 url: group.url,
@@ -212,9 +139,9 @@ export async function recommendGroups(jobTitle: string, jobLocation: string, job
         }
     });
 
-    // Sort by score
-    return relevantGroups
+    return results
         .sort((a, b) => b.score - a.score)
+        .slice(0, 10)
         .map(g => ({ id: g.id, name: g.name, url: g.url }));
 }
 
@@ -242,38 +169,44 @@ export async function createPublishRequest(
             return { success: false, message: 'Job not found' };
         }
 
-        // Create publish request in Firestore
+        // Get base URL for links (Layer 5)
+        const baseUrl = process.env.VITE_API_URL || 'https://1solutionjobs.vercel.app';
+        const landingPageUrl = `${baseUrl}/api/j/${jobId}`;
 
-        // Fetch dynamic Facebook settings if available
+        // Create publish request in Firestore
         const fbSettingsDoc = await db.collection('settings').doc('facebook').get();
         const fbSettings = fbSettingsDoc.exists ? fbSettingsDoc.data() : {};
 
-        const requestRef = await db.collection('publish_requests').add({
-            job_id: jobId,
-            job_title: job.title,
-            job_company: job.company,
-            job_location: job.location,
-            content,
-            platforms,
-            target_page_id: fbSettings?.page_id || '61587004355854',
-            target_page_name: fbSettings?.page_name || '1solution - השמה וגיוס כ״א',
-            target_groups: groupIds,
-            status: 'pending_approval',
-            created_at: admin.firestore.FieldValue.serverTimestamp(),
-            approved_by: null,
-            approved_at: null,
-            published_at: null,
-            results: null
-        });
+        try {
+            const requestRef = await db.collection('publish_requests').add({
+                job_id: jobId,
+                job_title: job.title || 'משרה חדשה',
+                job_company: job.company || 'חברה אנונימית',
+                job_location: job.location || 'ישראל',
+                content: content || '',
+                platforms,
+                target_page_id: fbSettings?.page_id || '61587004355854',
+                target_page_name: fbSettings?.page_name || '1solution - השמה וגיוס כ״א',
+                target_groups: groupIds || [],
+                landing_page_url: landingPageUrl,
+                status: 'pending_approval',
+                created_at: admin.firestore.FieldValue.serverTimestamp(),
+                approved_by: null,
+                approved_at: null,
+                published_at: null,
+                results: null
+            });
 
-        console.log(`[Publish Engine] ✅ Publish request created: ${requestRef.id}`);
-        console.log(`[Publish Engine] ⚠️ REQUIRES MANUAL APPROVAL - No automatic publishing`);
-
-        return {
-            success: true,
-            requestId: requestRef.id,
-            message: `בקשת פרסום נוצרה בהצלחה. דורש אישור ידני לפני פרסום.`
-        };
+            console.log(`[Publish Engine] ✅ Publish request created: ${requestRef.id}`);
+            return {
+                success: true,
+                requestId: requestRef.id,
+                message: `בקשת פרסום נוצרה בהצלחה. דורש אישור ידני בלוח הפרסומים.`
+            };
+        } catch (dbError: any) {
+            console.error('[Publish Engine] Firestore Add Error:', dbError);
+            throw new Error(`שגיאה בשמירת הבקשה: ${dbError.message}`);
+        }
     } catch (error: any) {
         console.error('[Publish Engine] Error creating publish request:', error);
         return {

@@ -99,9 +99,13 @@ export function LandingPage({ jobId }: LandingPageProps) {
 
                             <a
                                 href={`/api/j/${jobId}/apply`}
-                                className="block w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-center shadow-lg shadow-indigo-200 transition-all hover:-translate-y-1 mb-3"
+                                className="block w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-xl text-center shadow-lg shadow-indigo-500/30 transition-all hover:scale-[1.02] hover:shadow-indigo-500/50 mb-3 relative overflow-hidden group"
                             >
-                                בדוק התאמה עכשיו
+                                <span className="relative z-10 flex items-center justify-center gap-2">
+                                    בדוק התאמה עכשיו
+                                    <span className="animate-pulse">🚀</span>
+                                </span>
+                                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                             </a>
 
                             <button className="flex items-center justify-center gap-2 w-full py-3 bg-gray-50 text-gray-600 font-medium rounded-xl hover:bg-gray-100 transition-colors">

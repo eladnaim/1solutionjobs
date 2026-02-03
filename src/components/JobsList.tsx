@@ -28,6 +28,7 @@ export function JobsList({ onViewPublications }: JobsListProps) {
     const [loading, setLoading] = useState(true);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
         fetch('/api/jobs')
@@ -38,6 +39,13 @@ export function JobsList({ onViewPublications }: JobsListProps) {
             })
             .catch(() => setLoading(false));
     }, []);
+
+    const filteredJobs = jobs.filter(j =>
+        j.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        j.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        j.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        j.id.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     const copyToClipboard = (e: React.MouseEvent, text: string, id: string) => {
         e.stopPropagation();
@@ -50,12 +58,22 @@ export function JobsList({ onViewPublications }: JobsListProps) {
 
     return (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+            <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h3 className="font-bold text-xl text-gray-800">מאגר משרות פעיל</h3>
-                    <p className="text-sm text-gray-500 mt-1">נמשכו {jobs.length} משרות</p>
+                    <p className="text-sm text-gray-500 mt-1">נמצאו {filteredJobs.length} משרות תואמות</p>
                 </div>
-                <span className="text-xs text-gray-400 bg-gray-50 px-3 py-1 rounded-full">לחץ על משרה לניהול</span>
+                <div className="flex gap-2 w-full md:w-auto">
+                    <div className="relative flex-1 md:w-64">
+                        <input
+                            type="text"
+                            placeholder="חפש משרה, עיר או חברה..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition-all"
+                        />
+                    </div>
+                </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -69,7 +87,7 @@ export function JobsList({ onViewPublications }: JobsListProps) {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                        {jobs.map(job => (
+                        {filteredJobs.map(job => (
                             <tr
                                 key={job.id}
                                 onClick={() => setSelectedJob(job)}
