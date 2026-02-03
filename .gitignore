@@ -29,6 +29,11 @@ debug_*.png
 local-test*.js
 test*.ts
 check-*.ts
-print-*.ts
+check_*.ts
+setup_*.ts
+debug_*.ts
+get_*.ts
+test_*.ts
 inspect-*.ts
 desc_full.txt
+identity_check.png
