@@ -1,6 +1,10 @@
 import admin from 'firebase-admin';
 import { db } from './db.js';
 import { GeoEngine } from './geoEngine.js'; // Import the new Brain
+import { SocialMediaPublisher } from './socialMediaPublisher.js';
+
+// Global instance to reuse config loading
+const publisher = new SocialMediaPublisher();
 
 export interface Group {
     id: string;
@@ -166,7 +170,7 @@ export async function approvePublishRequest(requestId: string, approvedBy: strin
     const data = doc.data();
     if (data?.status !== 'pending') throw new Error("Request already processed");
 
-    // Update status
+    // Update status to approved locally first
     await docRef.update({
         status: 'approved',
         approved_by: approvedBy
@@ -174,16 +178,30 @@ export async function approvePublishRequest(requestId: string, approvedBy: strin
 
     console.log(`[Publish Engine] Approved ${requestId} by ${approvedBy}. Starting distribution...`);
 
-    // In a real scenario, here we would integrate with Facebook Graph API
-    // For now, we simulate success
-    data?.target_groups.forEach((group: any) => {
-        console.log(`[Publish Engine] Mock Posting to FB Group: ${group.name} (${group.url})`);
-    });
+    // --- REAL PUBLISHING EXECUTION ---
+    try {
+        // This will send to Facebook (Page), Telegram, etc. using the unified publisher
+        const results = await publisher.approveAndPublish(requestId, approvedBy);
 
-    await docRef.update({
-        status: 'published',
-        published_at: admin.firestore.FieldValue.serverTimestamp()
-    });
+        console.log(`[Publish Engine] ✅ Distribution Complete. Results:`, results);
+
+        // Also Mock post to groups (as we don't have Graph API for Groups usually, only Page)
+        // Groups posting requires Puppeteer or specific Group Apps. 
+        // For now, we keep the log for groups, but the Page/Telegram happening via Publisher is real.
+        if (data?.target_groups) {
+            data.target_groups.forEach((group: any) => {
+                console.log(`[Publish Engine] (Pending Feature) Auto-Posting to FB Group: ${group.name}`);
+            });
+        }
+
+    } catch (e: any) {
+        console.error(`[Publish Engine] ❌ Distribution Failed Partial/Full:`, e);
+        // We don't throw here to avoid crashing the server response, 
+        // as the status update happened. We log the error in the doc.
+        await docRef.update({
+            publishing_error: e.message
+        });
+    }
 }
 
 // Autopilot: Run matching and creation automatically
