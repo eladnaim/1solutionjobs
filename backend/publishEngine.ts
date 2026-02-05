@@ -63,6 +63,12 @@ export async function recommendGroups(jobTitle: string, jobLocation: string, job
         // --- RULE 1: GEO ENGINE SCORING (The Core Logic) ---
         let score = GeoEngine.getMatchScore(jobLocation, groupName, groupTags, groupRegion);
 
+        // Boost for EXACT city match in group name (Critical for precision)
+        // If job is "Tel Aviv" and group name has "Tel Aviv", give massive boost
+        if (jobLocation && groupName.includes(jobLocation)) {
+            score += 200;
+        }
+
         // Only run industry matching if Geo didn't kill it (score > -500)
         if (score > -500) {
             // --- RULE 2: INDUSTRY/DOMAIN MATCHING ---
@@ -102,7 +108,7 @@ export async function recommendGroups(jobTitle: string, jobLocation: string, job
 
     return results
         .sort((a, b) => b.score - a.score)
-        .slice(0, 10)
+        .slice(0, 3) // LIMIT TO TOP 3 GROUPS ONLY (Facebook Limit)
         .map(g => ({ id: g.id, name: g.name, url: g.url }));
 }
 
