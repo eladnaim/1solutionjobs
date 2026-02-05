@@ -471,17 +471,40 @@ export class SocialMediaPublisher {
             }
 
             const results: any = {};
+            const platformsToPublish = request.target_platforms || request.platforms || [];
 
             // Publish to each platform
-            for (const platform of request.platforms) {
+            for (const platform of platformsToPublish) {
                 try {
                     switch (platform) {
                         case 'facebook':
+                            // Try Graph API first
                             if (this.facebook) {
+                                console.log("[Publisher] 📡 Using Graph API for Facebook...");
                                 results.facebook = await this.facebook.publishToPage(
-                                    request.content,
-                                    request.link
+                                    request.generated_content || request.content,
+                                    request.job_link || request.link
                                 );
+                            } else {
+                                // FALLBACK: Use Puppeteer
+                                console.log("[Publisher] ⚠️ Graph API not configured. Falling back to Interactive Puppeteer...");
+                                // Lazy load FacebookScraper
+                                const { FacebookScraper } = await import('./facebookScraper.js');
+                                const scraper = new FacebookScraper();
+
+                                const fbSettings = await db.collection('settings').doc('facebook').get();
+                                const pageId = fbSettings.data()?.page_id || 'me';
+
+                                const success = await scraper.publishPost(
+                                    pageId,
+                                    request.generated_content || request.content || "גיוס עובדים!!"
+                                );
+
+                                if (success) {
+                                    results.facebook = { success: true, method: 'puppeteer' };
+                                } else {
+                                    throw new Error("Puppeteer publishing failed");
+                                }
                             }
                             break;
 
@@ -489,7 +512,7 @@ export class SocialMediaPublisher {
                             if (this.instagram && request.image_url) {
                                 results.instagram = await this.instagram.publishPost(
                                     request.image_url,
-                                    request.content
+                                    request.generated_content || request.content
                                 );
                             }
                             break;
@@ -497,8 +520,8 @@ export class SocialMediaPublisher {
                         case 'linkedin':
                             if (this.linkedin) {
                                 results.linkedin = await this.linkedin.publishPost(
-                                    request.content,
-                                    request.link
+                                    request.generated_content || request.content,
+                                    request.job_link || request.link
                                 );
                             }
                             break;
@@ -506,7 +529,8 @@ export class SocialMediaPublisher {
                         case 'twitter':
                             if (this.twitter) {
                                 // Twitter has 280 char limit
-                                const tweetText = request.content.substring(0, 270) + '... ' + request.link;
+                                const content = request.generated_content || request.content || '';
+                                const tweetText = content.substring(0, 270) + '... ' + (request.job_link || request.link || '');
                                 results.twitter = await this.twitter.publishTweet(tweetText);
                             }
                             break;
@@ -514,13 +538,16 @@ export class SocialMediaPublisher {
                         case 'telegram':
                             if (this.telegram) {
                                 results.telegram = await this.telegram.sendMessage(
-                                    request.content,
+                                    request.generated_content || request.content,
                                     request.image_url
                                 );
+                            } else {
+                                results.telegram = { error: "Telegram not configured in settings" };
                             }
                             break;
                     }
-                } catch (platformError) {
+                } catch (platformError: any) {
+                    console.error(`[Publisher] Error on ${platform}:`, platformError);
                     results[platform] = { error: platformError.message };
                 }
             }
