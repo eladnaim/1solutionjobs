@@ -218,17 +218,34 @@ export class FacebookScraper {
 
             await page.waitForTimeout(3000);
 
-            // Fill message using keyboard (more reliable than fill on collection inputs)
-            // FOCUS first
-            console.log("[Facebook Engine] Focusing input...");
-            await page.keyboard.press('Tab');
-            await page.waitForTimeout(500);
+            // Fill message using DOM Injection + Events (Rocket Logic 🚀)
+            // This bypasses the keyboard issues and directly updates the React state
+            console.log("[Facebook Engine] Injecting message into DOM...");
 
-            // Type slower to trigger React events
-            console.log("[Facebook Engine] Typing message...");
-            for (const char of message) {
-                await page.keyboard.type(char, { delay: Math.random() * 50 + 10 }); // Human-like typing
-            }
+            await page.evaluate((msg) => {
+                // Find the content editable div
+                const editor = document.querySelector('div[contenteditable="true"][role="textbox"]');
+                if (editor) {
+                    // Method 1: Direct text manipulation
+                    (editor as HTMLElement).innerText = msg;
+
+                    // Method 2: Create events to notify React
+                    const inputEvent = new Event('input', { bubbles: true });
+                    const changeEvent = new Event('change', { bubbles: true });
+                    const keyEvent = new KeyboardEvent('keydown', { bubbles: true, key: 'a' }); // Dummy key to wake up listeners
+
+                    editor.dispatchEvent(keyEvent);
+                    editor.dispatchEvent(inputEvent);
+                    editor.dispatchEvent(changeEvent);
+                }
+            }, message);
+
+            await page.waitForTimeout(1000);
+
+            // Backup: Press Space and Backspace to really trigger the "Enable" state
+            // This is crucial for React to detect "dirty" state
+            await page.keyboard.press('Space');
+            await page.keyboard.press('Backspace');
             await page.waitForTimeout(2000);
 
             await page.screenshot({ path: `./screenshots/pub_filled_${targetId.replace(/[^a-z0-9]/gi, '_')}.png` });
