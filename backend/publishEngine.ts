@@ -102,7 +102,33 @@ export async function recommendGroups(jobTitle: string, jobLocation: string, job
         .map(g => ({ id: g.id, name: g.name, url: g.url }));
 }
 
-export async function createPublishRequest(jobData: any, groups: RecommendedGroup[]): Promise<{ success: boolean, requestId?: string, message?: string }> {
+export async function createPublishRequest(
+    jobIdOrData: any,
+    groups: RecommendedGroup[],
+    content: string = '',
+    platforms: string[] = ['facebook', 'telegram'],
+    postToPage: boolean = true
+): Promise<{ success: boolean, requestId?: string, message?: string }> {
+
+    // 1. Resolve Job Data
+    let jobData: any = jobIdOrData;
+    let jobId: string;
+
+    if (typeof jobIdOrData === 'string') {
+        jobId = jobIdOrData;
+        const jobDoc = await db.collection('jobs').doc(jobId).get();
+        if (!jobDoc.exists) {
+            return { success: false, message: "Job not found in DB" };
+        }
+        jobData = { id: jobDoc.id, ...jobDoc.data() };
+    } else {
+        jobId = jobIdOrData.id;
+    }
+
+    if (!jobId || !jobData) {
+        return { success: false, message: "Invalid Job Data" };
+    }
+
     if (groups.length === 0) {
         console.log("No relevant groups found. Skipping.");
         return { success: false, message: "No relevant groups found" };
@@ -110,12 +136,14 @@ export async function createPublishRequest(jobData: any, groups: RecommendedGrou
 
     try {
         const publishRef = await db.collection('publish_requests').add({
-            job_id: jobData.id,
+            job_id: jobId,
             job_title: cleanTitle(jobData.title),
-            job_desc: jobData.description,
+            job_desc: jobData.description || jobData.description_clean,
             job_location: jobData.location,
-            job_link: jobData.application_link || jobData.link,
-            generated_content: "", // Will be filled by AI later
+            job_link: jobData.application_link || jobData.link || '',
+            generated_content: content || "",
+            target_platforms: platforms,
+            post_to_page: postToPage,
             target_groups: groups,
             status: 'pending', // pending -> approved -> published
             created_at: admin.firestore.FieldValue.serverTimestamp()
