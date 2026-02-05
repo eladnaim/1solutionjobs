@@ -218,8 +218,17 @@ export class FacebookScraper {
 
             await page.waitForTimeout(3000);
 
-            // Fill message using keyboard (more reliable than fill on complex inputs)
-            await page.keyboard.type(message, { delay: 50 });
+            // Fill message using keyboard (more reliable than fill on collection inputs)
+            // FOCUS first
+            console.log("[Facebook Engine] Focusing input...");
+            await page.keyboard.press('Tab');
+            await page.waitForTimeout(500);
+
+            // Type slower to trigger React events
+            console.log("[Facebook Engine] Typing message...");
+            for (const char of message) {
+                await page.keyboard.type(char, { delay: Math.random() * 50 + 10 }); // Human-like typing
+            }
             await page.waitForTimeout(2000);
 
             await page.screenshot({ path: `./screenshots/pub_filled_${targetId.replace(/[^a-z0-9]/gi, '_')}.png` });
@@ -238,18 +247,25 @@ export class FacebookScraper {
 
             let posted = false;
 
+            // Wait for button to become enabled
+            console.log("[Facebook Engine] Waiting for submit button to be enabled...");
+            try {
+                // Try to find ANY enabled submit button
+                const submitBtn = page.locator(submitSelectors.join(',')).filter({ hasNot: page.locator('[aria-disabled="true"]') }).first();
+                await submitBtn.waitFor({ state: 'visible', timeout: 5000 });
+            } catch (e) {
+                console.log("[Facebook Engine] Warning: Submit button might still be disabled or not found.");
+            }
+
             // Try Keyboard Shortcut first (Command+Enter or Ctrl+Enter)
             console.log("[Facebook Engine] ⌨️ Trying Keyboard Shortcut (Ctrl+Enter)...");
             await page.keyboard.down('Control');
             await page.keyboard.press('Enter');
             await page.keyboard.up('Control');
-            await page.waitForTimeout(2000);
+            await page.waitForTimeout(3000);
 
             // Check if dialog closed (indicates success)
-            // Use specific label for "Create Post" or just check if the generic dialog count decreased
             const createPostDialog = page.locator('div[role="dialog"][aria-label="יצירת פוסט"], div[role="dialog"][aria-label="Create post"], div[role="dialog"][aria-label="Create Post"]').first();
-
-            // If we can't find a specific titled dialog, fall back to the generic one but be careful
             const genericDialog = page.locator('div[role="dialog"]').filter({ hasText: /Post|פרסם|שתף/ }).first();
 
             if (await createPostDialog.count() > 0 && !(await createPostDialog.isVisible())) {
@@ -259,27 +275,31 @@ export class FacebookScraper {
                 console.log("[Facebook Engine] ✅ Generic Dialog closed.");
                 posted = true;
             } else {
-                // If still open, try clicking buttons
+                // If still open, try clicking buttons explicitly
                 for (const selector of submitSelectors) {
                     try {
                         const btn = page.locator(selector).first();
-                        // Check if visible
-                        if (await btn.isVisible({ timeout: 1000 })) {
-                            // Check if disabled - sometimes FB disables it until content is parsed
+
+                        if (await btn.isVisible()) {
+                            // Check if disabled
                             const ariaDisabled = await btn.getAttribute('aria-disabled');
                             if (ariaDisabled === 'true') {
-                                console.log(`[Facebook Engine] Found button ${selector} but it is DISABLED. Waiting...`);
-                                await page.waitForTimeout(2000); // Wait for enable
+                                console.log(`[Facebook Engine] Button ${selector} is DISABLED. Trying to re-trigger input...`);
+                                await page.keyboard.press('Space');
+                                await page.keyboard.press('Backspace');
+                                await page.waitForTimeout(1000);
                             }
 
-                            console.log(`[Facebook Engine] Clicking Submit: ${selector}`);
-                            await btn.click();
-                            await page.waitForTimeout(5000);
+                            // Click now
+                            if ((await btn.getAttribute('aria-disabled')) !== 'true') {
+                                console.log(`[Facebook Engine] Clicking Submit: ${selector}`);
+                                await btn.click();
+                                await page.waitForTimeout(5000);
 
-                            // Re-check visibility
-                            if (!(await createPostDialog.isVisible()) && !(await genericDialog.isVisible())) {
-                                posted = true;
-                                break;
+                                if (!(await createPostDialog.isVisible()) && !(await genericDialog.isVisible())) {
+                                    posted = true;
+                                    break;
+                                }
                             }
                         }
                     } catch (e) { }
