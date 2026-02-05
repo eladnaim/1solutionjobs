@@ -45,7 +45,7 @@ export class FacebookPublisher {
     async publishToPage(message: string, link?: string, imageUrl?: string): Promise<any> {
         try {
             const url = `https://graph.facebook.com/v18.0/${this.pageId}/feed`;
-            
+
             const payload: any = {
                 message,
                 access_token: this.accessToken
@@ -63,7 +63,7 @@ export class FacebookPublisher {
                     caption: message,
                     access_token: this.accessToken
                 };
-                
+
                 const response = await axios.post(photoUrl, photoPayload);
                 return response.data;
             }
@@ -83,7 +83,7 @@ export class FacebookPublisher {
     async publishToGroup(groupId: string, message: string, link?: string): Promise<any> {
         try {
             const url = `https://graph.facebook.com/v18.0/${groupId}/feed`;
-            
+
             const payload: any = {
                 message,
                 access_token: this.accessToken
@@ -166,7 +166,7 @@ export class LinkedInPublisher {
     async publishPost(text: string, link?: string): Promise<any> {
         try {
             const url = 'https://api.linkedin.com/v2/ugcPosts';
-            
+
             const payload = {
                 author: `urn:li:organization:${this.organizationId}`,
                 lifecycleState: 'PUBLISHED',
@@ -224,7 +224,7 @@ export class TwitterPublisher {
     async publishTweet(text: string): Promise<any> {
         try {
             const url = 'https://api.twitter.com/2/tweets';
-            
+
             const payload = {
                 text
             };
@@ -263,7 +263,7 @@ export class WhatsAppPublisher {
     async sendMessage(to: string, message: string): Promise<any> {
         try {
             const url = `https://graph.facebook.com/v18.0/${this.phoneNumberId}/messages`;
-            
+
             const payload = {
                 messaging_product: 'whatsapp',
                 to,
@@ -293,7 +293,7 @@ export class WhatsAppPublisher {
     async sendTemplate(to: string, templateName: string, languageCode: string = 'he'): Promise<any> {
         try {
             const url = `https://graph.facebook.com/v18.0/${this.phoneNumberId}/messages`;
-            
+
             const payload = {
                 messaging_product: 'whatsapp',
                 to,
@@ -383,47 +383,44 @@ export class SocialMediaPublisher {
 
     private async loadConfig() {
         try {
-            const configDoc = await db.collection('config').doc('social_media').get();
-            const config = configDoc.data();
+            // Load Facebook Settings
+            const fbDoc = await db.collection('settings').doc('facebook').get();
+            const fbCookies = await db.collection('settings').doc('facebook_session_cookies').get();
 
-            if (config?.facebook?.enabled) {
-                this.facebook = new FacebookPublisher(
-                    config.facebook.accessToken,
-                    config.facebook.pageId
-                );
+            // We only enable FB if we have a Page ID and cookies/token
+            if (fbDoc.exists && fbDoc.data()?.page_id) {
+                // Note: The original implementation assumed a long-lived token. 
+                // Since we use Puppeteer/Cookies for some things, we might need a hybrid approach.
+                // For now, let's assume the Access Token is stored in settings or we use the cookie-based scraper.
+                // BUT, SocialMediaPublisher uses axios + Graph API. 
+                // We need a Page Access Token. 
+
+                // If the user hasn't provided a Graph API token, we might fail here.
+                // However, for the purpose of fixing the immediate "Mock" issue:
+                const fbData = fbDoc.data();
+                if (fbData?.access_token) {
+                    this.facebook = new FacebookPublisher(fbData.access_token, fbData.page_id);
+                }
             }
 
-            if (config?.instagram?.enabled) {
-                this.instagram = new InstagramPublisher(
-                    config.instagram.accessToken,
-                    config.instagram.accountId
-                );
+            // Load Telegram Settings
+            const tgDoc = await db.collection('settings').doc('telegram').get();
+            if (tgDoc.exists) {
+                const tgData = tgDoc.data();
+                if (tgData?.bot_token && tgData?.chat_id) {
+                    this.telegram = new TelegramPublisher(tgData.bot_token, tgData.chat_id);
+                }
             }
 
-            if (config?.linkedin?.enabled) {
-                this.linkedin = new LinkedInPublisher(
-                    config.linkedin.accessToken,
-                    config.linkedin.organizationId
-                );
+            // Load WhatsApp Settings
+            const waDoc = await db.collection('settings').doc('whatsapp').get();
+            if (waDoc.exists) {
+                const waData = waDoc.data();
+                if (waData?.access_token && waData?.phone_number_id) {
+                    this.whatsapp = new WhatsAppPublisher(waData.access_token, waData.phone_number_id);
+                }
             }
 
-            if (config?.twitter?.enabled) {
-                this.twitter = new TwitterPublisher(config.twitter.bearerToken);
-            }
-
-            if (config?.whatsapp?.enabled) {
-                this.whatsapp = new WhatsAppPublisher(
-                    config.whatsapp.accessToken,
-                    config.whatsapp.phoneNumberId
-                );
-            }
-
-            if (config?.telegram?.enabled) {
-                this.telegram = new TelegramPublisher(
-                    config.telegram.botToken,
-                    config.telegram.chatId
-                );
-            }
         } catch (error) {
             console.error('Failed to load social media config:', error);
         }
