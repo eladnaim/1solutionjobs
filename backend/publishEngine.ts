@@ -127,7 +127,7 @@ export async function createPublishRequest(jobData: any, groups: RecommendedGrou
 }
 
 // Function to Approve and Execute Publish (Triggered by Manager via UI)
-export async function approveAndPublish(requestId: string) {
+export async function approvePublishRequest(requestId: string, approvedBy: string = 'System') {
     const docRef = db.collection('publish_requests').doc(requestId);
     const doc = await docRef.get();
 
@@ -137,9 +137,12 @@ export async function approveAndPublish(requestId: string) {
     if (data?.status !== 'pending') throw new Error("Request already processed");
 
     // Update status
-    await docRef.update({ status: 'approved' });
+    await docRef.update({
+        status: 'approved',
+        approved_by: approvedBy
+    });
 
-    console.log(`[Publish Engine] Approved ${requestId}. Starting distribution...`);
+    console.log(`[Publish Engine] Approved ${requestId} by ${approvedBy}. Starting distribution...`);
 
     // In a real scenario, here we would integrate with Facebook Graph API
     // For now, we simulate success
@@ -154,8 +157,8 @@ export async function approveAndPublish(requestId: string) {
 }
 
 // Autopilot: Run matching and creation automatically
-export async function autopublishJobs() {
-    console.log("[Publish Engine] Running Autopilot...");
+export async function runAutoPilotBatch(limit: number = 5) {
+    console.log(`[Publish Engine] Running Autopilot (Limit: ${limit})...`);
     // 1. Get unprocessed jobs
     // 2. Run recommendGroups
     // 3. Create publish requests
