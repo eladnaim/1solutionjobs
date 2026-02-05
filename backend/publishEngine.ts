@@ -102,10 +102,10 @@ export async function recommendGroups(jobTitle: string, jobLocation: string, job
         .map(g => ({ id: g.id, name: g.name, url: g.url }));
 }
 
-export async function createPublishRequest(jobData: any, groups: RecommendedGroup[]) {
+export async function createPublishRequest(jobData: any, groups: RecommendedGroup[]): Promise<{ success: boolean, requestId?: string, message?: string }> {
     if (groups.length === 0) {
         console.log("No relevant groups found. Skipping.");
-        return;
+        return { success: false, message: "No relevant groups found" };
     }
 
     try {
@@ -121,8 +121,10 @@ export async function createPublishRequest(jobData: any, groups: RecommendedGrou
             created_at: admin.firestore.FieldValue.serverTimestamp()
         });
         console.log(`[Publish Engine] Created request ${publishRef.id} with ${groups.length} groups.`);
-    } catch (error) {
+        return { success: true, requestId: publishRef.id };
+    } catch (error: any) {
         console.error("Error creating publish request:", error);
+        return { success: false, message: error.message };
     }
 }
 
