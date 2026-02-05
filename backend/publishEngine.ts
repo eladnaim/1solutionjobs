@@ -154,7 +154,8 @@ export async function createPublishRequest(
     jobId: string,
     groupIds: string[],
     content: string,
-    platforms: string[] = ['facebook']
+    platforms: string[] = ['facebook'],
+    postToPage: boolean = true
 ): Promise<{ success: boolean; requestId?: string; message: string }> {
     try {
         console.log(`[Publish Engine] Creating publish request for job ${jobId}`);
@@ -185,8 +186,9 @@ export async function createPublishRequest(
                 job_location: job.location || 'ישראל',
                 content: content || '',
                 platforms,
-                target_page_id: fbSettings?.page_id || '61587004355854',
-                target_page_name: fbSettings?.page_name || '1solution - השמה וגיוס כ״א',
+                post_to_page: postToPage,
+                target_page_id: fbSettings?.page_id,
+                target_page_name: fbSettings?.page_name,
                 target_groups: groupIds || [],
                 landing_page_url: landingPageUrl,
                 status: 'pending_approval',
@@ -258,10 +260,13 @@ export async function approvePublishRequest(
             const { FacebookScraper } = await import('./facebookScraper.js');
             const fb = new FacebookScraper();
 
-            // Post to Main Page
-            if (request.target_page_id) {
+            // Post to Main Page (only if post_to_page is true or missing)
+            if (request.target_page_id && (request.post_to_page !== false)) {
+                console.log(`[Publish Engine] Posting to Business Page: ${request.target_page_name}`);
                 const fbResult = await fb.publishPost(request.target_page_id, request.content);
                 results.platforms.facebook_page = { success: fbResult };
+            } else {
+                console.log('[Publish Engine] ⏭️ Skipping Business Page post (User opted out).');
             }
 
             // Post to Groups
@@ -335,9 +340,11 @@ export async function publishToTelegram(content: string, jobId: string): Promise
     try {
         const tgDoc = await db.collection('settings').doc('telegram').get();
         const config = tgDoc.exists ? tgDoc.data() : null;
+        const botToken = process.env.TELEGRAM_BOT_TOKEN || config?.bot_token;
+        const chatId = config?.chat_id;
 
-        if (!config || !config.bot_token || !config.chat_id) {
-            return { success: false, error: 'Telegram settings not configured' };
+        if (!botToken || !chatId) {
+            return { success: false, error: 'Telegram settings not configured (token or chat_id missing)' };
         }
 
         const baseUrl = process.env.VITE_API_URL || 'http://localhost:3001';
@@ -357,12 +364,12 @@ export async function publishToTelegram(content: string, jobId: string): Promise
 
         let response;
         if (imageUrl) {
-            const url = `https://api.telegram.org/bot${config.bot_token}/sendPhoto`;
+            const url = `https://api.telegram.org/bot${botToken}/sendPhoto`;
             const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    chat_id: config.chat_id,
+                    chat_id: chatId,
                     photo: imageUrl,
                     caption: finalContent,
                     parse_mode: 'HTML'
@@ -370,12 +377,12 @@ export async function publishToTelegram(content: string, jobId: string): Promise
             });
             response = await res.json();
         } else {
-            const url = `https://api.telegram.org/bot${config.bot_token}/sendMessage`;
+            const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
             const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    chat_id: config.chat_id,
+                    chat_id: chatId,
                     text: finalContent,
                     parse_mode: 'HTML'
                 })

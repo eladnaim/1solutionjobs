@@ -41,10 +41,10 @@ export function JobsList({ onViewPublications }: JobsListProps) {
     }, []);
 
     const filteredJobs = jobs.filter(j =>
-        j.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        j.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        j.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        j.id.toLowerCase().includes(searchTerm.toLowerCase())
+        j?.title?.toLowerCase()?.includes(searchTerm.toLowerCase()) ||
+        j?.location?.toLowerCase()?.includes(searchTerm.toLowerCase()) ||
+        j?.company?.toLowerCase()?.includes(searchTerm.toLowerCase()) ||
+        j?.id?.toLowerCase()?.includes(searchTerm.toLowerCase())
     );
 
     const copyToClipboard = (e: React.MouseEvent, text: string, id: string) => {
@@ -87,7 +87,13 @@ export function JobsList({ onViewPublications }: JobsListProps) {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                        {filteredJobs.map(job => (
+                        {filteredJobs.length === 0 ? (
+                            <tr>
+                                <td colSpan={4} className="p-12 text-center text-gray-400">
+                                    לא נמצאו משרות תואמות.
+                                </td>
+                            </tr>
+                        ) : filteredJobs.map(job => job && (
                             <tr
                                 key={job.id}
                                 onClick={() => setSelectedJob(job)}
@@ -136,7 +142,8 @@ export function JobsList({ onViewPublications }: JobsListProps) {
                                     </div>
                                 </td>
                             </tr>
-                        ))}
+                        )
+                        )}
                     </tbody>
                 </table>
             </div>

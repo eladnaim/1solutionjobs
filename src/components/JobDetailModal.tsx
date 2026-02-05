@@ -44,6 +44,7 @@ export function JobDetailModal({ job, onClose, onPublished }: JobDetailModalProp
     // Multi-platform selection
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['facebook', 'telegram']);
     const [published, setPublished] = useState(false);
+    const [postToPage, setPostToPage] = useState(true);
 
     // Update local state when prop changes (e.g. if parent refreshes)
     useEffect(() => {
@@ -116,6 +117,7 @@ export function JobDetailModal({ job, onClose, onPublished }: JobDetailModalProp
                     jobId: job.id,
                     platforms: selectedPlatforms,
                     groupIds: selectedGroups,
+                    postToPage: postToPage,
                     content: activeVersion === 'a' ? (job.viral_post_a || localViralPost) : (job.viral_post_b || localViralPost),
                     image_url: job.image_url
                 })
@@ -436,11 +438,8 @@ export function JobDetailModal({ job, onClose, onPublished }: JobDetailModalProp
                                         <input
                                             type="checkbox"
                                             id="post_to_page"
-                                            defaultChecked={true}
-                                            onChange={(e) => {
-                                                // We will need to plumb this through to the publish request
-                                                // For now, let's just visually show it works
-                                            }}
+                                            checked={postToPage}
+                                            onChange={(e) => setPostToPage(e.target.checked)}
                                             className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500"
                                         />
                                         <label htmlFor="post_to_page" className="text-xs font-bold text-gray-700 cursor-pointer select-none">

@@ -93,7 +93,9 @@ export async function generateJobContent(job: JobContent): Promise<GeneratedCont
         const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
         const content = JSON.parse(jsonStr) as GeneratedContent;
 
-        content.image_url = "https://images.unsplash.com/photo-1497215728101-856f4ea42174?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80";
+        // Use Pollinations.ai for dynamic, high-quality AI images without API key
+        const safePrompt = encodeURIComponent(`${content.image_prompt} ${roleTitle} professional cinematic lighting high quality`);
+        content.image_url = `https://image.pollinations.ai/prompt/${safePrompt}?width=1080&height=1080&nologo=true&seed=${Math.floor(Math.random() * 1000)}`;
 
         console.log(`[Content Engine] ✅ Content generated successfully for ${roleTitle}`);
         return content;
@@ -107,7 +109,7 @@ export async function generateJobContent(job: JobContent): Promise<GeneratedCont
             urgent_post: `🚀 משרה חדשה: ${roleTitle}\n📍 מיקום: ${area}\n💼 ניסיון רלוונטי חובה\n🔗 הגשה מהירה בלינק: [[LINK]]`,
             suggested_hashtags: ["#דרושים", "#עבודה", "#1solution", "#קריירה"],
             image_prompt: "Professional modern workspace",
-            image_url: "https://images.unsplash.com/photo-1497215728101-856f4ea42174?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80"
+            image_url: `https://image.pollinations.ai/prompt/professional%20modern%20workspace%20${encodeURIComponent(roleTitle)}?width=1080&height=1080&nologo=true`
         };
     }
 }

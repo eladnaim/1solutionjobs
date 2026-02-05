@@ -209,13 +209,14 @@ app.get('/api/facebook-groups', async (req, res) => {
 });
 
 app.post('/api/publish', async (req, res) => {
-    const { jobId, groupIds, content, platforms } = req.body;
+    const { jobId, groupIds, content, platforms, postToPage } = req.body;
     try {
         const result = await createPublishRequest(
             jobId,
             groupIds || [],
             content,
-            platforms || ['facebook', 'telegram']
+            platforms || ['facebook', 'telegram'],
+            postToPage !== undefined ? postToPage : true
         );
 
         if (result.success && result.requestId) {

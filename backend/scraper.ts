@@ -140,9 +140,11 @@ export class SVTScraper {
             userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         });
 
+        let jobsFound = 0;
+
         const page = await this.context.newPage();
         page.setDefaultTimeout(120000);
-        let jobsFound = 0;
+
 
         try {
             log("[SVT Engine] Navigating to list page...");
@@ -187,6 +189,7 @@ export class SVTScraper {
             // We want to skip jobs that are ALREADY fully scraped, but process those that are partial
             const allExistingDocs = await db.collection('jobs').select('id', 'is_full_scrape').get();
             const existingStatus = new Map(allExistingDocs.docs.map(d => [d.id, d.data().is_full_scrape]));
+            const existingIds = new Set(allExistingDocs.docs.map(d => d.id)); // For last_seen update
 
             let linksToProcess = [];
             const BATCH_SIZE = fullSweep ? 150 : 50;
@@ -297,7 +300,32 @@ export class SVTScraper {
 
                         let location = finder(['מיקום המשרה', 'מיקום', 'עיר', 'איזור', 'כתובת', 'City', 'Location']);
                         
-                        // Proximity Fallback: If no location found via labels, look at elements near the title
+                        // Proximity Fallback: Look ABOVE the job description if possible
+                        if (!location) {
+                            const jobDescLabel = allElements.find(el => el.textContent && (el.textContent.includes('תיאור המשרה') || el.textContent.includes('תיאור התפקיד')));
+                            if (jobDescLabel) {
+                                // Walk up the DOM to find the previous text block
+                                let prev = jobDescLabel.parentElement; 
+                                // Try to find a sibling above the description container
+                                if (prev) {
+                                     let sibling = prev.previousElementSibling;
+                                     if(sibling && sibling.textContent && sibling.textContent.length < 50) {
+                                         location = sibling.textContent.trim();
+                                     } else if (prev.parentElement) {
+                                         // Try looking at previous sibling of the parent container
+                                         let parentSibling = prev.parentElement.previousElementSibling;
+                                         if (parentSibling) {
+                                             const text = parentSibling.textContent ? parentSibling.textContent.trim() : '';
+                                             // Heuristic: Locations are usually short (2-30 chars)
+                                             if (text.length > 2 && text.length < 40 && !text.includes('משרה')) {
+                                                 location = text;
+                                             }
+                                         }
+                                     }
+                                }
+                            }
+                        }
+
                         if (!location && titleEl) {
                             const parent = titleEl.parentElement;
                             if (parent) {
