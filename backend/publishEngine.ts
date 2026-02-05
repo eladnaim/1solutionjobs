@@ -37,16 +37,17 @@ export function cleanTitle(title?: string): string {
 }
 
 const ALL_ISRAELI_CITIES = [
-    'תל אביב', 'ירושלים', 'חיפה', 'נתניה', 'באר שבע', 'פתח תקווה', 'ראשון לציון', 'אשדוד', 'חולון', 'בני ברק', 'רמת גן', 'רחובות', 'אשקלון', 'בת ים', 'בית שמש', 'כפר סבא', 'הרצליה', 'חדרה', 'מודיעין', 'רעננה', 'לוד', 'רמלה', 'נהריה', 'עכו', 'כרמיאל', 'טבריה', 'עפולה', 'נצרת', 'קרית גת', 'קרית אתא', 'קרית מוצקין', 'קרית ים', 'קרית ביאליק', 'מעלה אדומים', 'הוד השרון', 'גבעתיים', 'רמת השרון', 'נס ציונה', 'אלעד', 'אילת', 'חריש', 'יבנה', 'אור יהודה', 'מגדל העמק', 'צפת', 'נשר', 'ערד', 'קרית שמונה', 'שדרות', 'נתיבות', 'אופקים'
+    'תל אביב', 'ירושלים', 'חיפה', 'נתניה', 'באר שבע', 'פתח תקווה', 'ראשון לציון', 'אשדוד', 'חולון', 'בני ברק', 'רמת גן', 'רחובות', 'אשקלון', 'בת ים', 'בית שמש', 'כפר סבא', 'הרצליה', 'חדרה', 'מודיעין', 'רעננה', 'לוד', 'רמלה', 'נהריה', 'עכו', 'כרמיאל', 'טבריה', 'עפולה', 'נצרת', 'קרית גת', 'קרית אתא', 'קרית מוצקין', 'קרית ים', 'קרית ביאליק', 'מעלה אדומים', 'הוד השרון', 'גבעתיים', 'רמת השרון', 'נס ציונה', 'אלעד', 'אילת', 'חריש', 'יבנה', 'אור יהודה', 'מגדל העמק', 'צפת', 'נשר', 'ערד', 'קרית שמונה', 'שדרות', 'נתיבות', 'אופקים', 'גבעת שמואל', 'קרית אונו', 'גני תקווה', 'שוהם'
 ];
+
 const ISRAELI_REGIONS: Record<string, string[]> = {
-    'מרכז': ['תל אביב', 'רמת גן', 'גבעתיים', 'פתח תקווה', 'חולון', 'בת ים', 'ראשון לציון', 'בני ברק', 'אלעד'],
+    'מרכז': ['תל אביב', 'רמת גן', 'גבעתיים', 'פתח תקווה', 'חולון', 'בת ים', 'ראשון לציון', 'בני ברק', 'אלעד', 'גבעת שמואל', 'קרית אונו', 'גני תקווה', 'אור יהודה', 'יהוד', 'שוהם'],
     'שרון': ['נתניה', 'כפר סבא', 'רעננה', 'הוד השרון', 'הרצליה', 'רמת השרון', 'חדרה', 'חריש'],
     'Hasharon': ['נתניה', 'כפר סבא', 'רעננה', 'הוד השרון', 'הרצליה', 'רמת השרון', 'חדרה', 'חריש'],
-    'דרום': ['באר שבע', 'אשדוד', 'אשקלון', 'קרית גת', 'נתיבות', 'שדרות', 'אופקים', 'ערד', 'אילת'],
-    'צפון': ['חיפה', 'קריות', 'נהריה', 'עכו', 'כרמיאל', 'טבריה', 'עפולה', 'נצרת', 'צפת', 'קרית שמונה'],
-    'ירושלים': ['ירושלים', 'בית שמש', 'מעלה אדומים', 'מבשרת'],
-    'שפלה': ['רחובות', 'נס ציונה', 'לוד', 'רמלה', 'יבנה', 'מודיעין']
+    'דרום': ['באר שבע', 'אשדוד', 'אשקלון', 'קרית גת', 'נתיבות', 'שדרות', 'אופקים', 'ערד', 'אילת', 'דרום'],
+    'צפון': ['חיפה', 'קריות', 'נהריה', 'עכו', 'כרמיאל', 'טבריה', 'עפולה', 'נצרת', 'צפת', 'קרית שמונה', 'צפון'],
+    'ירושלים': ['ירושלים', 'בית שמש', 'מעלה אדומים', 'מבשרת', 'מודיעין'],
+    'שפלה': ['רחובות', 'נס ציונה', 'לוד', 'רמלה', 'יבנה', 'גדרה', 'מזכרת בתיה']
 };
 
 export async function recommendGroups(jobTitle: string, jobLocation: string, jobDescription: string = ''): Promise<RecommendedGroup[]> {
@@ -65,12 +66,15 @@ export async function recommendGroups(jobTitle: string, jobLocation: string, job
     const jobCities = ALL_ISRAELI_CITIES.filter(c => normalizedLocation.includes(c) || normalizedTitle.includes(c));
     if (jobCities.length === 0) jobCities.push(normalizedLocation);
 
-    // Identify ALL regions mentioned in the job
+    // Identify ALL regions mentioned in the job (via Cities or Direct Region Name)
     const jobRegions = Object.keys(ISRAELI_REGIONS).filter(r =>
         normalizedLocation.includes(r) ||
         normalizedTitle.includes(r) ||
         jobCities.some(city => ISRAELI_REGIONS[r].includes(city))
     );
+
+    // Debug
+    // console.log(`Job Regions: ${jobRegions.join(', ')}`);
 
     const results: any[] = [];
 
@@ -83,12 +87,19 @@ export async function recommendGroups(jobTitle: string, jobLocation: string, job
 
         // --- RULE 1: STRICT GEOGRAPHIC FILTERING (Multi-city & Region aware) ---
         const groupCitiesFound = ALL_ISRAELI_CITIES.filter(c => groupName.includes(c) || groupTags.includes(c.toLowerCase()));
-        const groupRegionsFound = Object.keys(ISRAELI_REGIONS).filter(r => groupName.includes(r) || r.toLowerCase() === groupRegion);
 
+        // Find regions the GROUP belongs to
+        const groupRegionsFound = Object.keys(ISRAELI_REGIONS).filter(r =>
+            groupName.includes(r) ||
+            r.toLowerCase() === groupRegion ||
+            groupCitiesFound.some(city => ISRAELI_REGIONS[r].includes(city))
+        );
+
+        // 1. City Mismatch Check
         if (groupCitiesFound.length > 0) {
             const hasCityMatch = groupCitiesFound.some(gc => jobCities.some(jc => jc.includes(gc) || gc.includes(jc)));
             if (hasCityMatch) {
-                score += 100;
+                score += 150; // Stronger boost for exact city match
             } else {
                 // Penalize if the group targets a DIFFERENT city exclusively
                 const isGeneral = groupName.includes('כל הארץ') || groupName.includes('ארצי') || groupRegion === 'general';
@@ -98,12 +109,24 @@ export async function recommendGroups(jobTitle: string, jobLocation: string, job
             }
         }
 
-        // Region match boost
-        const hasRegionMatch = groupRegionsFound.some(gr => jobRegions.includes(gr));
-        if (hasRegionMatch) score += 40;
+        // 2. Region Mismatch Check (CRITICAL FIX)
+        // If the Job belongs to specific regions (e.g. Center), and the Group belongs to DIFFERENT specific regions (e.g. South), KILL the score.
+        if (jobRegions.length > 0 && groupRegionsFound.length > 0) {
+            const hasRegionIntersection = groupRegionsFound.some(gr => jobRegions.includes(gr));
+            if (hasRegionIntersection) {
+                score += 50;
+            } else {
+                // Job is in [Center], Group is in [South] -> Mismatch!
+                // Verify it's not a general group
+                const isGeneralGroup = groupName.includes('כל הארץ') || groupName.includes('ארצי') || groupRegion === 'general';
+                if (!isGeneralGroup) {
+                    score -= 600; // Heavy penalty for cross-region mismatch
+                }
+            }
+        }
 
         // General fallback for all country groups
-        if (groupName.includes('כל הארץ') || groupName.includes('ארצי') || groupRegion === 'general') score += 10;
+        if (groupName.includes('כל הארץ') || groupName.includes('ארצי') || groupRegion === 'general') score += 20;
 
         // --- RULE 2: INDUSTRY/DOMAIN MATCHING ---
         const industryKeywords: Record<string, string[]> = {
