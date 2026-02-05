@@ -115,30 +115,42 @@ export class SVTScraper {
 
         try {
             // 1. Retrieve Session from Firebase
-            const doc = await this.storageRef.get();
+            console.log("[SVT Engine] DEBUG: initializing storageRef...");
+            const storageRef = db.collection('settings').doc('svt_session_cookies');
+
+            console.log("[SVT Engine] DEBUG: calling storageRef.get()...");
+            const doc = await storageRef.get();
+            console.log("[SVT Engine] DEBUG: get() returned. Exists:", doc.exists);
+
             if (doc.exists && doc.data()?.storageState) {
                 storageState = JSON.parse(doc.data()?.storageState);
                 fs.writeFileSync(localSessionPath, JSON.stringify(storageState));
-                console.log("[SVT Engine] Session retrieved from Firebase.");
+                log("[SVT Engine] Session retrieved from Firebase.");
             } else {
                 throw new Error("NO_SESSION_IN_DB");
             }
         } catch (e: any) {
-            console.warn("[SVT Engine] Firebase Registry Unavailable. Checking local fallback...");
+            console.error("[SVT Engine] DEBUG: Catch block entered!", e);
+            log(`[SVT Engine] DEBUG: Firestore Error: ${e.message}`);
+            log("[SVT Engine] Firebase Registry Unavailable. Checking local fallback...");
             if (fs.existsSync(localSessionPath)) {
                 storageState = JSON.parse(fs.readFileSync(localSessionPath, 'utf8'));
                 log("[SVT Engine] Using LOCAL session fallback.");
             } else {
                 log("[SVT Engine] Critical Error: No session found.");
+                SVTScraper.isRunning = false; // Reset lock
                 throw new Error("SESSION_MISSING");
             }
         }
 
-        this.browser = await chromium.launch({ headless: true });
+        log("[SVT Engine] DEBUG: Launching Browser...");
+        this.browser = await chromium.launch({ headless: true }); // Ensure headless is true for background
+        log("[SVT Engine] DEBUG: Browser Launched. Creating Context...");
         this.context = await this.browser.newContext({
             storageState,
             userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         });
+        log("[SVT Engine] DEBUG: Context Created. Opening Page...");
 
         let jobsFound = 0;
 
