@@ -388,27 +388,47 @@ export class SVTScraper {
                     const jobRef = db.collection('jobs').doc(jobId);
                     const doc = await jobRef.get();
                     if (!doc.exists) {
-                        const { generateJobContent } = await import('./contentEngine');
+                        const { generateJobContent } = await import('./contentEngine.js'); // Add .js extension for consistency
                         const content = await generateJobContent({ original_title: title, description: description_clean, location });
                         await jobRef.set({
-                            id: jobId, title, location, company_description: company_desc, application_link: app_link,
-                            original_description: description, description_clean, extraction_method, is_full_scrape, ...content,
-                            status: 'active', source_link: link, created_at: admin.firestore.FieldValue.serverTimestamp(), last_checked: admin.firestore.FieldValue.serverTimestamp()
+                            id: jobId,
+                            title: title || 'ללא כותרת',
+                            location: location || 'ישראל',
+                            company_description: company_desc || '', // FIX: Ensure not undefined
+                            application_link: app_link || '',
+                            original_description: description || '',
+                            description_clean: description_clean || '',
+                            extraction_method: extraction_method || 'unknown',
+                            is_full_scrape: is_full_scrape || false,
+                            ...content,
+                            status: 'active',
+                            source_link: link,
+                            created_at: admin.firestore.FieldValue.serverTimestamp(),
+                            last_checked: admin.firestore.FieldValue.serverTimestamp()
                         });
                         log(`[SVT Engine] ✅ Saved: ${jobId}`);
                     } else {
                         const existing = doc.data();
                         const needsUpdate = !existing?.description_clean || existing.description_clean.length < 200;
+
+                        // FIX: Ensure no field is undefined
                         const updateData: any = {
-                            title: title || existing?.title, location: location || existing?.location,
-                            company_description: company_desc || existing?.company_description,
-                            application_link: app_link || existing?.application_link,
-                            last_checked: admin.firestore.FieldValue.serverTimestamp(), status: 'active'
+                            title: title || existing?.title || 'ללא כותרת',
+                            location: location || existing?.location || 'ישראל',
+                            company_description: company_desc || existing?.company_description || '',
+                            application_link: app_link || existing?.application_link || '',
+                            last_checked: admin.firestore.FieldValue.serverTimestamp(),
+                            status: 'active'
                         };
+
                         if (needsUpdate && description_clean.length > 200) {
-                            const { generateJobContent } = await import('./contentEngine');
+                            const { generateJobContent } = await import('./contentEngine.js');
                             const content = await generateJobContent({ original_title: title, description: description_clean, location });
-                            Object.assign(updateData, content, { description_clean, is_full_scrape: true, extraction_method });
+                            Object.assign(updateData, content, {
+                                description_clean: description_clean || '',
+                                is_full_scrape: true,
+                                extraction_method: extraction_method || 'unknown'
+                            });
                         }
                         await jobRef.update(updateData);
                         log(`[SVT Engine] 🔄 Updated: ${jobId}`);
