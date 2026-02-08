@@ -31,8 +31,23 @@ export function JobDetailModal({ job, onClose, onPublished }: JobDetailModalProp
     if (!job) return null;
 
     const [activeTab, setActiveTab] = useState<'content' | 'original'>('content');
-    const [publishing, setPublishing] = useState(false);
-    const [localViralPost, setLocalViralPost] = useState(job.viral_post_a || job.viral_post || '');
+    const [isPublishing, setIsPublishing] = useState(false);
+
+    // Smart Link Replacement 🔗
+    const publicLink = `https://onesolution.jobs/j/${job.id}`;
+    const cleanPost = (text: string) => {
+        if (!text) return '';
+        // Clean old placeholders
+        let cleaned = text.replace(/\[LINK\]/g, '')
+            .replace(/\[קישור\]/g, '')
+            .replace(/<<LINK>>/g, '')
+            .trim();
+
+        // Add structured Call-to-Action for clickable image
+        return `${cleaned}\n\n👇 לחצ/י על התמונה להגשת מועמדות ופרטים נוספים:\n${publicLink}`;
+    };
+
+    const [localViralPost, setLocalViralPost] = useState(cleanPost(job.viral_post_a || job.viral_post || ''));
     const [activeVersion, setActiveVersion] = useState<'a' | 'b'>(job.viral_post_b && !job.viral_post_a ? 'b' : 'a');
 
     // Edit & Preview State
@@ -108,37 +123,44 @@ export function JobDetailModal({ job, onClose, onPublished }: JobDetailModalProp
     };
 
     const handleConfirmPublish = async () => {
-        setPublishing(true);
+        setIsPublishing(true);
         try {
-            const res = await fetch('/api/publish', {
+            // Set a very long timeout (5 minutes) because Puppeteer takes time
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes
+
+            const res = await fetch('/api/publish-request', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     jobId: job.id,
-                    platforms: selectedPlatforms,
-                    groupIds: selectedGroups,
-                    postToPage: postToPage,
-                    content: activeVersion === 'a' ? (job.viral_post_a || localViralPost) : (job.viral_post_b || localViralPost),
-                    image_url: job.image_url
-                })
+                    platforms: selectedPlatforms, // Only selected
+                    content: localViralPost,
+                    link: job.link, // For Linkedin/FB
+                    image: job.image_url
+                }),
+                signal: controller.signal
             });
-            const data = await res.json();
 
+            clearTimeout(timeoutId);
+
+            const data = await res.json();
             if (data.success) {
-                setPublished(true);
+                alert('הבקשה נשלחה ופורסמה בהצלחה!');
                 setShowPreview(false);
-                alert('בקשות הפרסום נוצרו! המתן לאישור סופי בדף הפרסומים.');
-                setTimeout(() => {
-                    if (onPublished) onPublished();
-                    onClose();
-                }, 1500);
+                onClose();
             } else {
-                alert('שגיאה ביצירת בקשת פרסום: ' + data.error);
+                alert('שגיאה בפרסום: ' + (data.error || 'נסה שנית'));
             }
-        } catch (e) {
-            alert('שגיאת תקשורת במערכת הפרסום.');
+        } catch (e: any) {
+            if (e.name === 'AbortError') {
+                alert('הפעולה רצה ברקע, אך לקח לה יותר מ-5 דקות. בדוק את הדף עוד מעט.');
+            } else {
+                console.error(e);
+                alert('שגיאת תקשורת במערכת הפרסום.');
+            }
         } finally {
-            setPublishing(false);
+            setIsPublishing(false);
         }
     };
 
@@ -285,10 +307,10 @@ export function JobDetailModal({ job, onClose, onPublished }: JobDetailModalProp
                         </button>
                         <button
                             onClick={handleConfirmPublish}
-                            disabled={publishing || selectedPlatforms.length === 0}
+                            disabled={isPublishing || selectedPlatforms.length === 0}
                             className="flex-[2] py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {publishing ? (
+                            {isPublishing ? (
                                 <div className="animate-spin w-5 h-5 border-2 border-white/30 border-t-white rounded-full"></div>
                             ) : (
                                 <Send size={20} />
@@ -590,10 +612,10 @@ export function JobDetailModal({ job, onClose, onPublished }: JobDetailModalProp
 
                             <button
                                 onClick={handlePublishClick}
-                                disabled={publishing || published}
+                                disabled={isPublishing || published}
                                 className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold shadow-lg shadow-indigo-200 transition-all active:scale-95 text-white ${published ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                             >
-                                {publishing ? (
+                                {isPublishing ? (
                                     <>
                                         <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div>
                                         <span>מעבד...</span>

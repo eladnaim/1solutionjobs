@@ -124,7 +124,7 @@ export async function getPublicJob(req: Request, res: Response) {
                                     </svg>
                                     מידע חשוב
                                 </h4>
-                                <ul class="text-sm text-slate-400 space-y-4 relative">
+                            <ul class="text-sm text-slate-400 space-y-4 relative">
                                     <li class="flex items-start gap-3">
                                         <span class="text-indigo-400 font-bold">✓</span>
                                         <span>סודיות מוחלטת מובטחת לכל אורך התהליך</span>
@@ -136,6 +136,10 @@ export async function getPublicJob(req: Request, res: Response) {
                                     <li class="flex items-start gap-3">
                                         <span class="text-indigo-400 font-bold">✓</span>
                                         <span>הזדמנויות קידום בארגון דינמי</span>
+                                    </li>
+                                     <li class="flex items-start gap-3 border-t border-slate-700 pt-3 mt-2">
+                                        <span class="text-pink-500 font-bold">♥</span>
+                                        <span class="text-slate-300">בניהולה של רונית - מנהלת כ״א ארגון צוות דרום</span>
                                     </li>
                                 </ul>
                             </div>

@@ -191,59 +191,71 @@ export class FacebookScraper {
             await page.screenshot({ path: `./screenshots/pub_pre_${targetId.replace(/[^a-z0-9]/gi, '_')}.png` });
 
             // Robust Selector for Post Box
-            // Try different variants of the "Write something" button
             const postSelectors = [
-                'div[role="button"] span:has-text("מה בא לך לשתף")', // Specific from your screenshot!
+                'div[role="button"] span:has-text("מה בא לך לשתף")',
+                'div[role="button"] span:has-text("כתבו פוסט")',
+                'div[role="button"] span:has-text("What\'s on your mind")',
                 'div[role="button"]:has-text("מה בא לך לשתף")',
                 'div[role="button"]:has-text("כתבו פוסט")',
                 'div[role="button"]:has-text("Write something")',
-                'div[role="button"]:has-text("מה עובר לך בראש")',
-                '.m9osae9f.p01is63a'
+                'div[role="button"][aria-label="Create post"]',
+                'div[role="button"][aria-label="צרו פוסט"]'
             ];
 
             let clicked = false;
             for (const selector of postSelectors) {
                 try {
-                    await page.click(selector, { timeout: 5000 });
-                    clicked = true;
-                    break;
+                    const el = page.locator(selector).first();
+                    if (await el.isVisible()) {
+                        console.log(`[Facebook Engine] Found Post Box via selector: ${selector}`);
+                        await el.click({ timeout: 5000 });
+                        clicked = true;
+                        break;
+                    }
                 } catch (e) { }
             }
 
             if (!clicked) {
-                // Try clicking the area by coordinates if selectors fail (Fallback)
+                console.log("[Facebook Engine] ⚠️ Could not find specific post button selector. Trying blind click at 600,400...");
                 await page.mouse.click(600, 400);
                 await page.waitForTimeout(2000);
             }
 
             await page.waitForTimeout(3000);
 
-            // Fill message using DOM Injection + Events (Rocket Logic 🚀)
-            // This bypasses the keyboard issues and directly updates the React state
+            // VERIFY DIALOG OPENED
+            const isDialogVisible = await page.evaluate(() => {
+                return !!document.querySelector('div[role="dialog"]') || !!document.querySelector('div[contenteditable="true"]');
+            });
+
+            if (!isDialogVisible) {
+                console.error("[Facebook Engine] ❌ Post dialog did not open! Aborting.");
+                await page.screenshot({ path: `./screenshots/pub_failed_start_${targetId}.png` });
+                throw new Error("Failed to open Create Post dialog");
+            }
+
+            // Fill message using DOM Injection
             console.log("[Facebook Engine] Injecting message into DOM...");
 
-            await page.evaluate((msg) => {
-                // Find the content editable div
+            const injected = await page.evaluate((msg) => {
                 const editor = document.querySelector('div[contenteditable="true"][role="textbox"]');
                 if (editor) {
-                    // Method 1: Direct text manipulation
                     (editor as HTMLElement).innerText = msg;
-
-                    // Method 2: Create events to notify React
                     const inputEvent = new Event('input', { bubbles: true });
-                    const changeEvent = new Event('change', { bubbles: true });
-                    const keyEvent = new KeyboardEvent('keydown', { bubbles: true, key: 'a' }); // Dummy key to wake up listeners
-
-                    editor.dispatchEvent(keyEvent);
                     editor.dispatchEvent(inputEvent);
-                    editor.dispatchEvent(changeEvent);
+                    return true;
                 }
+                return false;
             }, message);
+
+            if (!injected) {
+                console.error("[Facebook Engine] ❌ Could not find text editor box!");
+                throw new Error("Could not find text editor box in dialog");
+            }
 
             await page.waitForTimeout(1000);
 
-            // Backup: Press Space and Backspace to really trigger the "Enable" state
-            // This is crucial for React to detect "dirty" state
+            // Backup: Press Space and Backspace
             await page.keyboard.press('Space');
             await page.keyboard.press('Backspace');
             await page.waitForTimeout(2000);
@@ -351,6 +363,134 @@ export class FacebookScraper {
                 }
             }
             await this.cleanup();
+            return false;
+        }
+    }
+
+    async publishToGroup(groupId: string, message: string): Promise<boolean> {
+        console.log(`[Facebook Engine] 🚀 Publishing to Group: ${groupId}`);
+
+        try {
+            // Ensure we have a valid session
+            if (!this.browser) {
+                // Load state from Firestore or Local
+                const doc = await this.storageRef.get();
+                if (!doc.exists) throw new Error("No session cookies found. Please log in first.");
+
+                const stateData = doc.data();
+                if (!stateData?.storageState) throw new Error("Session state is empty.");
+
+                const state = JSON.parse(stateData.storageState);
+
+                this.browser = await chromium.launch({ headless: false }); // Visible for debugging
+                this.context = await this.browser.newContext({
+                    storageState: state,
+                    viewport: { width: 1280, height: 800 }
+                });
+            }
+
+            const page = await this.context!.newPage();
+
+            // 1. Go to Group URL
+            const groupUrl = `https://www.facebook.com/groups/${groupId}`;
+            try {
+                await page.goto(groupUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+                await page.waitForTimeout(4000);
+            } catch (navError) {
+                console.warn("[Facebook Engine] Group navigation timeout (non-fatal), proceeding...", navError);
+            }
+
+            // 2. Check Identity (Are we posting as Page?)
+            console.log("[Facebook Engine] 🕵️ Checking group identity context...");
+            // TODO: Add explicit identity switch if necessary
+
+            console.log(`[Facebook Engine] On Group Page: ${page.url()}`);
+            await page.screenshot({ path: `./screenshots/group_pre_${groupId}.png` });
+
+            // 3. Find Post Box
+            const postSelectors = [
+                'div[role="button"] span:has-text("Write something")',
+                'div[role="button"] span:has-text("כתבו משהו")',
+                'div[role="button"] span:has-text("Start a discussion")',
+                'div[role="button"] span:has-text("What\'s on your mind")',
+                'div[role="button"]:has-text("Write something")',
+                'div[role="button"]:has-text("כתבו משהו")',
+                'div[role="button"][aria-label="Create a public post"]',
+                'div[role="button"][aria-label="צור פוסט ציבורי"]'
+            ];
+
+            let clicked = false;
+            for (const selector of postSelectors) {
+                try {
+                    const el = page.locator(selector).first();
+                    if (await el.isVisible()) {
+                        console.log(`[Facebook Engine] Found Group Post Box: ${selector}`);
+                        await el.click({ timeout: 5000 });
+                        clicked = true;
+                        break;
+                    }
+                } catch (e) { }
+            }
+
+            if (!clicked) {
+                console.log("[Facebook Engine] ⚠️ Could not find group post button. Trying blind click...");
+                await page.mouse.click(600, 350);
+                await page.waitForTimeout(2000);
+            }
+
+            await page.waitForTimeout(3000);
+
+            // VERIFY DIALOG OPENED
+            const isDialogVisible = await page.evaluate(() => {
+                return !!document.querySelector('div[role="dialog"]') || !!document.querySelector('div[contenteditable="true"]');
+            });
+
+            if (!isDialogVisible) {
+                console.error(`[Facebook Engine] ❌ Group post dialog did not open for ${groupId}! Aborting.`);
+                await page.screenshot({ path: `./screenshots/group_failed_start_${groupId}.png` });
+                throw new Error("Failed to open Group Create Post dialog");
+            }
+
+            // 4. Inject Message
+            console.log("[Facebook Engine] Injecting message into Group DOM...");
+            const injected = await page.evaluate((msg) => {
+                const editor = document.querySelector('div[contenteditable="true"][role="textbox"]');
+                if (editor) {
+                    (editor as HTMLElement).innerText = msg;
+                    const inputEvent = new Event('input', { bubbles: true });
+                    editor.dispatchEvent(inputEvent);
+                    return true;
+                }
+                return false;
+            }, message);
+
+            if (!injected) {
+                console.error("[Facebook Engine] ❌ Could not find text editor box in group!");
+                throw new Error("Could not find text editor box in group dialog");
+            }
+
+            await page.waitForTimeout(1000);
+            await page.keyboard.press('Space');
+            await page.keyboard.press('Backspace');
+            await page.waitForTimeout(2000);
+
+            await page.screenshot({ path: `./screenshots/group_filled_${groupId}.png` });
+
+            // 5. Submit
+            console.log("[Facebook Engine] ⌨️ Try sending with Ctrl+Enter");
+            await page.keyboard.down('Control');
+            await page.keyboard.press('Enter');
+            await page.keyboard.up('Control');
+            await page.waitForTimeout(5000);
+
+            console.log(`[Facebook Engine] ✅ Post potentially published to Group ${groupId}`);
+            await page.screenshot({ path: `./screenshots/group_done_${groupId}.png` });
+
+            await page.close();
+            return true;
+
+        } catch (error: any) {
+            console.error(`[Facebook Engine] Group Publishing Failed (${groupId}):`, error.message);
             return false;
         }
     }

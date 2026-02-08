@@ -49,8 +49,8 @@ export async function recommendGroups(jobTitle: string, jobLocation: string, job
 
     if (snapshot.empty) return [];
 
-    const normalizedTitle = jobTitle.toLowerCase();
-    const normalizedDesc = jobDescription.toLowerCase();
+    const normalizedTitle = (jobTitle || '').toString().toLowerCase();
+    const normalizedDesc = (jobDescription || '').toString().toLowerCase();
 
     const results: any[] = [];
 
@@ -150,7 +150,7 @@ export async function createPublishRequest(
             job_title: cleanTitle(jobData.title),
             job_desc: jobData.description || jobData.description_clean,
             job_location: jobData.location,
-            job_link: jobData.application_link || jobData.link || '',
+            job_link: jobData.application_link || jobData.link || `https://1solutionjobs.vercel.app/j/${jobId}`,
             generated_content: content || "",
             target_platforms: platforms,
             post_to_page: postToPage,
@@ -194,10 +194,8 @@ export async function approvePublishRequest(requestId: string, approvedBy: strin
         // Also Mock post to groups (as we don't have Graph API for Groups usually, only Page)
         // Groups posting requires Puppeteer or specific Group Apps. 
         // For now, we keep the log for groups, but the Page/Telegram happening via Publisher is real.
-        if (data?.target_groups) {
-            data.target_groups.forEach((group: any) => {
-                console.log(`[Publish Engine] (Pending Feature) Auto-Posting to FB Group: ${group.name}`);
-            });
+        if (data?.target_groups && data?.target_groups.length > 0) {
+            console.log(`[Publish Engine] 👥 Triggered Group Publishing for ${data.target_groups.length} groups.`);
         }
 
     } catch (e: any) {
@@ -212,8 +210,63 @@ export async function approvePublishRequest(requestId: string, approvedBy: strin
 
 // Autopilot: Run matching and creation automatically
 export async function runAutoPilotBatch(limit: number = 5) {
-    console.log(`[Publish Engine] Running Autopilot (Limit: ${limit})...`);
-    // 1. Get unprocessed jobs
-    // 2. Run recommendGroups
-    // 3. Create publish requests
+    console.log(`[Publish Engine] 🤖 Running Autopilot (Limit: ${limit})...`);
+
+    try {
+        // 1. Get unprocessed jobs (new jobs from last 24h that haven't been published)
+        // We look for jobs where 'publish_status' is missing or 'pending'
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+        const snapshot = await db.collection('jobs')
+            .where('created_at', '>', twentyFourHoursAgo)
+            .where('is_full_scrape', '==', true) // Only publish high quality jobs
+            .limit(20) // Get more than limit to filter in memory if needed
+            .get();
+
+        let processedCount = 0;
+
+        for (const doc of snapshot.docs) {
+            if (processedCount >= limit) break;
+
+            const job = doc.data();
+
+            // Check if already has a publish request
+            const existingReq = await db.collection('publish_requests').where('job_id', '==', doc.id).get();
+            if (!existingReq.empty) {
+                continue; // Already processed
+            }
+
+            console.log(`[Publish Engine] Processing Job: ${job.title} (${doc.id})`);
+
+            // 2. Recommend Groups
+            const groups = await recommendGroups(job.title, job.location, job.description_clean);
+
+            // 3. Create Publish Request
+            if (groups.length > 0 || true) { // Even if no groups, we might want to publish to Page/Telegram
+                const platforms = ['facebook', 'telegram'];
+                const content = job.viral_post || job.professional_post || job.description_clean || '';
+
+                const result = await createPublishRequest(
+                    { id: doc.id, ...job },
+                    groups,
+                    content,
+                    platforms,
+                    true
+                );
+
+                if (result.success && result.requestId) {
+                    console.log(`[Publish Engine] ✅ Created Request ${result.requestId}`);
+
+                    // 4. Auto-Approve (since this is AutoPilot)
+                    await approvePublishRequest(result.requestId, 'AutoPilot');
+                    processedCount++;
+                }
+            }
+        }
+
+        console.log(`[Publish Engine] Batch Complete. Processed ${processedCount} jobs.`);
+
+    } catch (error) {
+        console.error("[Publish Engine] AutoPilot Error:", error);
+    }
 }

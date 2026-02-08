@@ -19,6 +19,14 @@
             "dest": "backend/server.ts"
         },
         {
+            "src": "/j/(.*)",
+            "dest": "backend/server.ts"
+        },
+        {
+            "src": "/team-south",
+            "dest": "backend/server.ts"
+        },
+        {
             "handle": "filesystem"
         },
         {

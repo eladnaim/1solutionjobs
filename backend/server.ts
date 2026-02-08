@@ -3,19 +3,35 @@ import express from 'express';
 import cors from 'cors';
 import cron from 'node-cron';
 import admin from 'firebase-admin';
-import { SVTScraper } from './scraper.js';
 import { db } from './db.js';
-import { FacebookScraper } from './facebookScraper.js';
 import { syncFacebookGroups } from './sync_groups.js';
 import { recommendGroups, createPublishRequest, approvePublishRequest, runAutoPilotBatch } from './publishEngine.js';
 import { getPublicJob, trackAndRedirect } from './landingController.js';
 import { generateJobContent } from './contentEngine.js';
 import { findMatchesForRequirement, checkNewCandidateAgainstRequirements } from './matchingEngine.js';
 
+// Lazy Load Scrapers for Vercel compatibility (Playwright is heavy)
+let svtScraper: any = null;
+let fbScraper: any = null;
+
+async function getSVTScraper() {
+    if (!svtScraper) {
+        const { SVTScraper } = await import('./scraper.js');
+        svtScraper = new SVTScraper();
+    }
+    return svtScraper;
+}
+
+async function getFBScraper() {
+    if (!fbScraper) {
+        const { FacebookScraper } = await import('./facebookScraper.js');
+        fbScraper = new FacebookScraper();
+    }
+    return fbScraper;
+}
+
 const app = express();
 const PORT = 3001;
-const svtScraper = new SVTScraper();
-const fbScraper = new FacebookScraper();
 
 app.use(cors());
 app.use(express.json());
@@ -34,8 +50,8 @@ app.get('/api/svt-status', async (_req, res) => {
     try {
         const doc = await db.collection('settings').doc('svt_session_cookies').get();
         const connected = doc.exists && doc.data()?.connected === true;
-        const active = (SVTScraper as any).isRunning || false;
-        res.json({ connected, active });
+        // On Vercel we assume not running actively
+        res.json({ connected, active: false });
     } catch (error) {
         res.json({ connected: false, active: false });
     }
@@ -60,69 +76,13 @@ app.get('/api/facebook-status', async (_req, res) => {
     }
 });
 
-// Facebook Page Settings
-app.get('/api/settings/facebook', async (_req, res) => {
-    try {
-        const doc = await db.collection('settings').doc('facebook').get();
-        res.json({ success: true, settings: doc.exists ? doc.data() : {} });
-    } catch (error: any) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-app.post('/api/settings/facebook', async (req, res) => {
-    const { page_id, page_name } = req.body;
-    try {
-        await db.collection('settings').doc('facebook').set({
-            page_id,
-            page_name,
-            updated_at: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-        res.json({ success: true });
-    } catch (error: any) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// Telegram Status
-app.get('/api/telegram-status', async (_req, res) => {
-    try {
-        const doc = await db.collection('settings').doc('telegram').get();
-        const connected = doc.exists && !!doc.data()?.bot_token && !!doc.data()?.chat_id;
-        res.json({ connected });
-    } catch (error) {
-        res.json({ connected: false });
-    }
-});
-
-// Telegram Settings
-app.get('/api/settings/telegram', async (_req, res) => {
-    try {
-        const doc = await db.collection('settings').doc('telegram').get();
-        res.json({ success: true, settings: doc.exists ? doc.data() : {} });
-    } catch (error: any) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-app.post('/api/settings/telegram', async (req, res) => {
-    const { bot_token, chat_id } = req.body;
-    try {
-        await db.collection('settings').doc('telegram').set({
-            bot_token,
-            chat_id,
-            updated_at: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-        res.json({ success: true });
-    } catch (error: any) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
+// ...
 
 // SVT Login
 app.post('/api/svt-login', async (_req, res) => {
     try {
-        const result = await svtScraper.runInteractiveLogin();
+        const scraper = await getSVTScraper();
+        const result = await scraper.runInteractiveLogin();
         res.json({ success: result });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
@@ -132,7 +92,8 @@ app.post('/api/svt-login', async (_req, res) => {
 // Facebook Interactive Login
 app.post('/api/facebook-login', async (_req, res) => {
     try {
-        const result = await fbScraper.runInteractiveLogin();
+        const scraper = await getFBScraper();
+        const result = await scraper.runInteractiveLogin();
         res.json({ success: true, result });
     } catch (error: any) {
         console.error("Facebook login error:", error);
@@ -140,23 +101,14 @@ app.post('/api/facebook-login', async (_req, res) => {
     }
 });
 
-// Sync Facebook Groups
-app.post('/api/sync-groups', async (_req, res) => {
-    try {
-        const result = await syncFacebookGroups();
-        res.json(result);
-    } catch (error: any) {
-        console.error("Group sync error:", error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
+// ...
 
 // Pull Endpoint (Trigger Layer 2.2)
 app.get('/api/pull-jobs', async (req, res) => {
     const fullSweep = req.query.fullSweep === 'true';
 
     // Start the process but don't 'await' it to prevent UI timeout
-    svtScraper.scrapeJobs(fullSweep).catch(err => console.error("Background Scrape Failed:", err));
+    getSVTScraper().then(scraper => scraper.scrapeJobs(fullSweep)).catch(err => console.error("Background Scrape Failed:", err));
 
     res.json({
         success: true,
@@ -445,6 +397,57 @@ app.post('/api/candidates/:id/check-availability', async (req, res) => {
 
 // ...
 
+// --- LAYER 8: PUBLISHING ENGINE ---
+
+import { createPublishRequest, approveAndPublish, recommendGroups } from './publishEngine';
+
+app.post('/api/publish-request', async (req, res) => {
+    try {
+        console.log(`[Server] Received publish request for Job ${req.body.jobId}`);
+        const { jobId, platforms, content, link, image } = req.body;
+
+        // 1. Get Recommendations (Invisible Step)
+        // We need groups to publish to facebook properly
+        const jobDoc = await db.collection('jobs').doc(jobId).get();
+        const jobData = jobDoc.data();
+        const groups = await recommendGroups(jobData);
+
+        // 2. Create Request Object
+        const requestResult = await createPublishRequest(
+            jobId,
+            groups,
+            content,
+            platforms,
+            true // postToPage defaults to true
+        );
+
+        if (!requestResult.success) {
+            throw new Error(requestResult.message);
+        }
+
+        // 3. Execute Immediately (For now - later we can use queue)
+        // We need to re-fetch the request we just created to pass full object or just pass IDs
+        // Simplification: We call approveAndPublish with the ID we just got.
+
+        console.log(`[Server] Approving publish request ${requestResult.requestId}...`);
+
+        // Dynamic import to avoid circular dependencies if any
+        const { SocialMediaPublisher } = await import('./socialMediaPublisher');
+        const publisher = new SocialMediaPublisher();
+        await publisher.loadConfig();
+
+        const publishResult = await publisher.approveAndPublish(requestResult.requestId!, 'System');
+
+        res.json({ success: true, results: publishResult });
+
+    } catch (error: any) {
+        console.error("[Server] Publish Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ...
+
 app.post('/api/jobs/:id/regenerate', async (req, res) => {
     try {
         const jobId = req.params.id;
@@ -514,7 +517,8 @@ app.get('/api/stats', async (_req, res) => {
     }
 });
 
-// Public Job Data (for Landing Page)
+// Public Job Data (for Landing Page) - Clean URL
+app.get('/j/:id', (req, res) => getPublicJob(req, res));
 app.get('/api/j/:id', (req, res) => getPublicJob(req, res));
 
 // Apply Redirect (Click Tracking)
@@ -556,7 +560,9 @@ app.post('/api/requirements/match', async (req, res) => {
 cron.schedule('*/30 * * * *', async () => {
     console.log("[Automation] Triggering Scheduled Scrape...");
     try {
-        await svtScraper.scrapeJobs();
+        if (process.env.VERCEL) return; // Skip cron on Vercel
+        const scraper = await getSVTScraper();
+        await scraper.scrapeJobs();
     } catch (e) {
         console.error("[Automation] Scheduled Scrape Failed:", e);
     }

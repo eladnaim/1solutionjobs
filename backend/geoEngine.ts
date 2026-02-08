@@ -102,7 +102,7 @@ export class GeoEngine {
     static normalizeLocation(rawInput: string): { city: string | null, region: Region, original: string } {
         if (!rawInput) return { city: null, region: 'general', original: '' };
 
-        const input = rawInput.toLowerCase().trim();
+        const input = (rawInput || '').toString().toLowerCase().trim();
 
         // 1. Try to find an Exact City Match
         for (const city of CITY_DATABASE) {
@@ -183,7 +183,8 @@ export class GeoEngine {
      * Reverse Engineering: Determine a Group's geography based on its name and tags
      */
     private static analyzeGroup(name: string, tags: string[], definedRegion: string): { cities: string[], region: Region } {
-        const input = (name + ' ' + tags.join(' ')).toLowerCase();
+        const safeTags = Array.isArray(tags) ? tags : [];
+        const input = ((name || '') + ' ' + safeTags.join(' ')).toLowerCase();
         const foundCities: string[] = [];
         let detectedRegion: Region = 'general';
 
