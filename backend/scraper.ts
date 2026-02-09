@@ -1,4 +1,4 @@
-import { chromium, Browser, BrowserContext } from 'playwright';
+import type { Browser, BrowserContext } from 'playwright';
 import { db } from './db.js';
 import admin from 'firebase-admin';
 import * as fs from 'fs';
@@ -31,6 +31,7 @@ export class SVTScraper {
      */
     async runInteractiveLogin() {
         log("[SVT Engine] Initiating Interactive Login Protocol...");
+        const { chromium } = await import('playwright');
 
         // Launch Visible Browser
         this.browser = await chromium.launch({ headless: false });
@@ -144,6 +145,7 @@ export class SVTScraper {
         }
 
         log("[SVT Engine] DEBUG: Launching Browser...");
+        const { chromium } = await import('playwright');
         this.browser = await chromium.launch({ headless: true }); // Ensure headless is true for background
         log("[SVT Engine] DEBUG: Browser Launched. Creating Context...");
         this.context = await this.browser.newContext({

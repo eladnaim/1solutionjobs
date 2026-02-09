@@ -1,4 +1,4 @@
-import { chromium, Browser, BrowserContext } from 'playwright';
+import type { Browser, BrowserContext } from 'playwright';
 import admin from 'firebase-admin';
 import { db } from './db.js';
 import * as fs from 'fs';
@@ -11,6 +11,7 @@ export class FacebookScraper {
 
     async runInteractiveLogin(): Promise<boolean> {
         console.log("[Facebook Engine] Starting Interactive Login Flow...");
+        const { chromium } = await import('playwright');
 
         try {
             this.browser = await chromium.launch({ headless: false });
@@ -118,6 +119,7 @@ export class FacebookScraper {
 
             const state = JSON.parse(stateData.storageState);
 
+            const { chromium } = await import('playwright');
             this.browser = await chromium.launch({ headless: false }); // Visible for debugging
             this.context = await this.browser.newContext({
                 storageState: state,
@@ -382,6 +384,7 @@ export class FacebookScraper {
 
                 const state = JSON.parse(stateData.storageState);
 
+                const { chromium } = await import('playwright');
                 this.browser = await chromium.launch({ headless: false }); // Visible for debugging
                 this.context = await this.browser.newContext({
                     storageState: state,

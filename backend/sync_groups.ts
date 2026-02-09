@@ -1,9 +1,7 @@
 
-import { chromium } from 'playwright';
 import { db } from './db.js';
 import * as fs from 'fs';
 
-// Israel Cities Mapping for Auto-Tagging
 // Israel Cities Mapping for Auto-Tagging
 const CITIES_MAPPING: Record<string, string[]> = {
     'דרום': ['באר שבע', 'אשקלון', 'אשדוד', 'נתיבות', 'שדרות', 'אילת', 'דרום', 'קרית גת', 'דימונה', 'ערד', 'אופקים'],
@@ -16,6 +14,7 @@ const CITIES_MAPPING: Record<string, string[]> = {
 
 export async function syncFacebookGroups() {
     console.log("🚀 Starting Facebook Groups Sync...");
+    const { chromium } = await import('playwright');
 
     // Load cookies
     const doc = await db.collection('settings').doc('facebook_session_cookies').get();
