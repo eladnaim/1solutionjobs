@@ -6,29 +6,11 @@ import admin from 'firebase-admin';
 import { db } from './db.js';
 import { syncFacebookGroups } from './sync_groups.js';
 import { recommendGroups, createPublishRequest, approvePublishRequest, runAutoPilotBatch } from './publishEngine.js';
-import { getPublicJob, trackAndRedirect } from './landingController.js';
+import { getPublicJob, trackAndRedirect, getTeamSouthGateway } from './landingController.js';
 import { generateJobContent } from './contentEngine.js';
 import { findMatchesForRequirement, checkNewCandidateAgainstRequirements } from './matchingEngine.js';
 
-// Lazy Load Scrapers for Vercel compatibility (Playwright is heavy)
-let svtScraper: any = null;
-let fbScraper: any = null;
-
-async function getSVTScraper() {
-    if (!svtScraper) {
-        const { SVTScraper } = await import('./scraper.js');
-        svtScraper = new SVTScraper();
-    }
-    return svtScraper;
-}
-
-async function getFBScraper() {
-    if (!fbScraper) {
-        const { FacebookScraper } = await import('./facebookScraper.js');
-        fbScraper = new FacebookScraper();
-    }
-    return fbScraper;
-}
+// ... imports ...
 
 const app = express();
 const PORT = 3001;
@@ -44,6 +26,15 @@ app.use('/screenshots', express.static('screenshots'));
 app.get('/', (_req, res) => {
     res.send('1solution jobs Intelligent HR System - API v1 is active.');
 });
+
+// Gateway Pages
+app.get('/team-south', getTeamSouthGateway);
+
+// Job Landing Pages
+app.get('/j/:id', getPublicJob);
+app.get('/api/j/:id', (req, res) => getPublicJob(req, res));
+app.get('/job/:id', (req, res) => getPublicJob(req, res));
+app.get('/api/j/:id/apply', trackAndRedirect);
 
 // SVT Status
 app.get('/api/svt-status', async (_req, res) => {
