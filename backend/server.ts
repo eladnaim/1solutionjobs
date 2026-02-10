@@ -55,19 +55,93 @@ app.get('/api/facebook-status', async (_req, res) => {
         const settingsDoc = await db.collection('settings').doc('facebook').get();
         const settingsData = settingsDoc.exists ? settingsDoc.data() : {};
 
-        const connected = doc.exists && doc.data()?.connected === true && !!settingsData?.page_id;
+        const graphDoc = await db.collection('settings').doc('facebook_graph').get();
+        const hasGraphToken = graphDoc.exists && !!graphDoc.data()?.access_token;
+
+        const connected = (doc.exists && doc.data()?.connected === true) || hasGraphToken;
 
         res.json({
             connected,
-            page_name: settingsData?.page_name || null,
-            page_id: settingsData?.page_id || null
+            page_name: settingsData?.page_name || (graphDoc.exists ? "Facebook Page (Graph)" : null),
+            page_id: settingsData?.page_id || (graphDoc.exists ? graphDoc.data()?.page_id : null),
+            method: hasGraphToken ? 'graph_api' : 'puppeteer'
         });
     } catch (error) {
         res.json({ connected: false });
     }
 });
 
+// Telegram Status
+app.get('/api/telegram-status', async (_req, res) => {
+    try {
+        const doc = await db.collection('settings').doc('telegram').get();
+        const connected = doc.exists && !!doc.data()?.bot_token && !!doc.data()?.chat_id;
+        res.json({ connected });
+    } catch (error) {
+        res.json({ connected: false });
+    }
+});
+
 // ...
+
+
+// Settings Endpoints
+app.get('/api/settings/facebook', async (_req, res) => {
+    try {
+        const doc = await db.collection('settings').doc('facebook').get();
+        res.json({ success: true, settings: doc.exists ? doc.data() : {} });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/settings/facebook', async (req, res) => {
+    const { page_id, page_name, access_token } = req.body;
+    try {
+        await db.collection('settings').doc('facebook').set({
+            page_id,
+            page_name,
+            access_token,
+            updated_at: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        // Also update facebook_graph for the new publisher
+        if (access_token) {
+            await db.collection('settings').doc('facebook_graph').set({
+                page_id,
+                access_token,
+                updated_at: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+        }
+
+        res.json({ success: true });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/api/settings/telegram', async (_req, res) => {
+    try {
+        const doc = await db.collection('settings').doc('telegram').get();
+        res.json({ success: true, settings: doc.exists ? doc.data() : {} });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/settings/telegram', async (req, res) => {
+    const { bot_token, chat_id } = req.body;
+    try {
+        await db.collection('settings').doc('telegram').set({
+            bot_token,
+            chat_id,
+            updated_at: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        res.json({ success: true });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 
 // SVT Login
 app.post('/api/svt-login', async (_req, res) => {

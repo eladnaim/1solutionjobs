@@ -29,12 +29,13 @@ export function Settings({
     const [activeTab, setActiveTab] = useState<'social' | 'system' | 'notifications'>('social');
     const [fbPageId, setFbPageId] = useState('');
     const [fbPageName, setFbPageName] = useState('');
+    const [fbAccessToken, setFbAccessToken] = useState('');
     const [tgBotToken, setTgBotToken] = useState('');
     const [tgChatId, setTgChatId] = useState('');
     const [isSavingFB, setIsSavingFB] = useState(false);
     const [isSavingTG, setIsSavingTG] = useState(false);
     const [isTestingTG, setIsTestingTG] = useState(false);
-    const [tgTestResult, setTgTestResult] = useState<{success: boolean, message: string} | null>(null);
+    const [tgTestResult, setTgTestResult] = useState<{ success: boolean, message: string } | null>(null);
 
     useEffect(() => {
         // Load existing FB settings
@@ -44,6 +45,7 @@ export function Settings({
                 if (data.success && data.settings) {
                     setFbPageId(data.settings.page_id || '');
                     setFbPageName(data.settings.page_name || '');
+                    setFbAccessToken(data.settings.access_token || '');
                 }
             });
 
@@ -106,7 +108,7 @@ export function Settings({
             const res = await fetch('/api/settings/facebook', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ page_id: fbPageId, page_name: fbPageName })
+                body: JSON.stringify({ page_id: fbPageId, page_name: fbPageName, access_token: fbAccessToken })
             });
             const data = await res.json();
             if (data.success) {
@@ -130,19 +132,19 @@ export function Settings({
 
             {/* Navigation Tabs */}
             <div className="flex gap-2 p-1 bg-slate-200/50 rounded-2xl w-fit">
-                <button 
+                <button
                     onClick={() => setActiveTab('social')}
                     className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'social' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                     חיבורי מדיה
                 </button>
-                <button 
+                <button
                     onClick={() => setActiveTab('system')}
                     className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'system' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                     חיבורי ליבה
                 </button>
-                <button 
+                <button
                     onClick={() => setActiveTab('notifications')}
                     className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'notifications' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
@@ -162,7 +164,7 @@ export function Settings({
                                 </h3>
                                 <p className="text-sm text-slate-500 mt-1">חבר את החשבונות העסקיים שלך להפצה אוטומטית</p>
                             </div>
-                            
+
                             <div className="p-8 space-y-6">
                                 {/* Facebook */}
                                 <div className="p-4 rounded-2xl border border-slate-100 hover:bg-slate-50 transition-colors space-y-4">
@@ -183,20 +185,20 @@ export function Settings({
                                                 </div>
                                             </div>
                                         </div>
-                                        <button 
+                                        <button
                                             onClick={onConnectFacebook}
                                             className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${isFacebookConnected ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-[#1877F2] text-white hover:bg-[#166fe5] shadow-lg shadow-blue-100'}`}
                                         >
                                             {isFacebookConnected ? 'מחובר ✅' : 'חבר חשבון'}
                                         </button>
                                     </div>
-                                    
+
                                     {/* Page Settings Form */}
                                     <div className="pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div>
                                             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">מזהה דף עסקי (Page ID)</label>
-                                            <input 
-                                                type="text" 
+                                            <input
+                                                type="text"
                                                 value={fbPageId}
                                                 onChange={e => setFbPageId(e.target.value)}
                                                 placeholder="לדוגמה: 61587004355854"
@@ -205,8 +207,8 @@ export function Settings({
                                         </div>
                                         <div>
                                             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">שם הדף המדויק</label>
-                                            <input 
-                                                type="text" 
+                                            <input
+                                                type="text"
                                                 value={fbPageName}
                                                 onChange={e => setFbPageName(e.target.value)}
                                                 placeholder="1solution - השמה וגיוס"
@@ -214,8 +216,21 @@ export function Settings({
                                             />
                                         </div>
                                         <div className="md:col-span-2">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Graph API Access Token (מזהה גישה קבוע)</label>
+                                            <input
+                                                type="password"
+                                                value={fbAccessToken}
+                                                onChange={e => setFbAccessToken(e.target.value)}
+                                                placeholder="EAA..."
+                                                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:ring-1 focus:ring-blue-500 outline-none"
+                                            />
+                                            <p className="text-[10px] text-slate-400 mt-1 italic">
+                                                * חובה לפרסום אוטומטי יציב. ניתן להשיג דרך Meta for Developers.
+                                            </p>
+                                        </div>
+                                        <div className="md:col-span-2">
                                             <p className="text-[10px] text-slate-400 italic mb-2">💡 טיפ: תוכל למצוא את ה-Page ID בלשונית "אודות" (About) בדף העסקי שלך בפייסבוק.</p>
-                                            <button 
+                                            <button
                                                 onClick={handleSaveFacebook}
                                                 disabled={isSavingFB}
                                                 className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-1.5 rounded-lg text-xs transition-colors flex items-center justify-center gap-2"
@@ -238,7 +253,7 @@ export function Settings({
                                             <p className="text-xs text-slate-500">פרסום בדף החברה ופרופיל אישי</p>
                                         </div>
                                     </div>
-                                    <button 
+                                    <button
                                         onClick={onConnectLinkedIn}
                                         className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${isLinkedInConnected ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-800 text-white hover:bg-slate-900 shadow-lg shadow-slate-200'}`}
                                     >
@@ -257,7 +272,7 @@ export function Settings({
                                             <p className="text-xs text-slate-500">פרסום ויזואלי ב-Feed ו-Stories</p>
                                         </div>
                                     </div>
-                                    <button 
+                                    <button
                                         onClick={onConnectInstagram}
                                         className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${isInstagramConnected ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-800 text-white hover:bg-slate-900 shadow-lg shadow-slate-200'}`}
                                     >
@@ -277,7 +292,7 @@ export function Settings({
                                                 <p className="text-xs text-slate-500">הפצה מיידית לערוץ דרושים</p>
                                             </div>
                                         </div>
-                                        <div 
+                                        <div
                                             className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${isTelegramConnected ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-200 text-slate-400'}`}
                                         >
                                             {isTelegramConnected ? 'מחובר ✅' : 'לא מוגדר'}
@@ -289,14 +304,14 @@ export function Settings({
                                         <div className="md:col-span-2">
                                             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Bot Token (מ-BotFather)</label>
                                             <div className="flex gap-2">
-                                                <input 
-                                                    type="password" 
+                                                <input
+                                                    type="password"
                                                     value={tgBotToken}
                                                     onChange={e => setTgBotToken(e.target.value)}
                                                     placeholder="לדוגמה: 123456789:ABCdef..."
                                                     className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:ring-1 focus:ring-blue-500 outline-none"
                                                 />
-                                                <button 
+                                                <button
                                                     onClick={handleTestTelegram}
                                                     disabled={isTestingTG || !tgBotToken}
                                                     className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold border border-blue-100 hover:bg-blue-100 transition-colors disabled:opacity-50"
@@ -313,8 +328,8 @@ export function Settings({
                                         </div>
                                         <div>
                                             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Chat ID או שם ערוץ (@channel)</label>
-                                            <input 
-                                                type="text" 
+                                            <input
+                                                type="text"
                                                 value={tgChatId}
                                                 onChange={e => setTgChatId(e.target.value)}
                                                 placeholder="@my_channel_name"
@@ -322,7 +337,7 @@ export function Settings({
                                             />
                                         </div>
                                         <div className="flex items-end">
-                                            <button 
+                                            <button
                                                 onClick={handleSaveTelegram}
                                                 disabled={isSavingTG}
                                                 className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-1.5 rounded-lg text-xs transition-colors flex items-center justify-center gap-2"
@@ -361,7 +376,7 @@ export function Settings({
                                             <p className="text-xs text-slate-500">סנכרון משרות ונתוני לקוחות</p>
                                         </div>
                                     </div>
-                                    <button 
+                                    <button
                                         onClick={onConnectSVT}
                                         className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
                                     >
@@ -383,7 +398,7 @@ export function Settings({
                         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
                         <h4 className="text-lg font-bold mb-4 relative z-10">אבטחת מידע</h4>
                         <p className="text-sm text-slate-400 relative z-10 leading-relaxed">
-                            כל החיבורים מבוצעים באמצעות הצפנת SSL/TLS. 
+                            כל החיבורים מבוצעים באמצעות הצפנת SSL/TLS.
                             פרטי הגישה (Tokens) נשמרים בסביבה מבודדת ומאובטחת ב-Google Cloud.
                         </p>
                         <div className="mt-6 flex items-center gap-2 text-blue-400 text-xs font-bold relative z-10">

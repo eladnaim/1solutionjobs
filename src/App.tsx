@@ -12,6 +12,7 @@ function App() {
     const [isTelegramConnected, setIsTelegramConnected] = useState(false);
     const [isPulling, setIsPulling] = useState(false);
     const [facebookPageName, setFacebookPageName] = useState('');
+    const [facebookPageId, setFacebookPageId] = useState('');
 
     // Basic Client-Side Routing
     const path = window.location.pathname;
@@ -43,6 +44,7 @@ function App() {
             const fbData = await fbRes.json();
             setIsFacebookConnected(fbData.connected);
             setFacebookPageName(fbData.page_name || '');
+            setFacebookPageId(fbData.page_id || '');
 
             // Check Telegram Status
             const tgRes = await fetch('/api/telegram-status');
@@ -101,7 +103,7 @@ function App() {
         } catch (e) {
             alert("שגיאה בתקשורת עם השרת.");
         } finally {
-            setIsPulling(false); 
+            setIsPulling(false);
         }
     };
 
@@ -122,6 +124,7 @@ function App() {
             isConnected={isConnected}
             isFacebookConnected={isFacebookConnected}
             facebookPageName={facebookPageName}
+            facebookPageId={facebookPageId}
             isLinkedInConnected={isLinkedInConnected}
             isInstagramConnected={isInstagramConnected}
             isTelegramConnected={isTelegramConnected}

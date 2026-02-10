@@ -212,3 +212,75 @@ export async function trackAndRedirect(req: Request, res: Response) {
         res.status(500).send("Server Error");
     }
 }
+/**
+ * Team South Gateway Page
+ * A branded landing page for Ronit's team (Tzevet South).
+ */
+export async function getTeamSouthGateway(req: Request, res: Response) {
+    const html = `
+    <!DOCTYPE html>
+    <html lang="he" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>צוות דרום | 1solution Jobs</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+        <style>
+            body { font-family: 'Assistant', sans-serif; }
+            .brand-gradient { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); }
+        </style>
+    </head>
+    <body class="bg-white text-slate-900">
+        <header class="p-6 flex justify-between items-center border-b border-slate-50">
+            <img src="/logo.png" class="h-8 w-auto">
+            <span class="text-xs font-bold text-slate-400 tracking-widest uppercase">One Solution × Tzevet South</span>
+        </header>
+
+        <main class="max-w-4xl mx-auto px-6 py-20 text-center space-y-12">
+            <div class="inline-block px-4 py-1.5 bg-blue-50 text-blue-700 rounded-full text-xs font-bold border border-blue-100 mb-4 animate-bounce">
+                בניהולה של רונית - צוות דרום 📍
+            </div>
+            
+            <h1 class="text-5xl md:text-7xl font-black text-slate-900 leading-tight tracking-tight">
+                הדרך הבאה שלך <br/> <span class="text-blue-600">מתחילה כאן.</span>
+            </h1>
+            
+            <p class="text-xl text-slate-500 max-w-2xl mx-auto leading-relaxed">
+                ברוכים הבאים לשער הגיוס הייחודי של 1solution בשיתוף "צוות" (מחוז דרום). 
+                מרכז ההשתלבות והקריירה שלך עובר שדרוג דיגיטלי מלא.
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 pt-10">
+                <a href="/?soldiers=true&ref=team_south" class="group p-10 bg-slate-50 border border-slate-100 rounded-[3rem] hover:bg-blue-600 hover:text-white transition-all shadow-xl shadow-slate-100 text-right">
+                    <h3 class="text-3xl font-bold mb-4">חיילים משוחררים</h3>
+                    <p class="opacity-70 leading-relaxed mb-6">משרות אבטחה, לוגיסטיקה וניהול המותאמות בדיוק לניסיון הצבאי שלך. ליווי אישי ושיבוץ מהיר.</p>
+                    <span class="font-bold border-b-2 border-current pb-1 group-hover:border-white">הכנס למשרות חמות ←</span>
+                </a>
+
+                <a href="/veterans?ref=team_south" class="group p-10 bg-slate-900 text-white rounded-[3rem] hover:bg-indigo-700 transition-all shadow-2xl text-right">
+                    <h3 class="text-3xl font-bold mb-4">פורשים וגמלאים</h3>
+                    <p class="text-slate-400 group-hover:text-indigo-100 leading-relaxed mb-6">קריירה שנייה או השלמת הכנסה? מצא משרות איכותיות בפריסה דרומית עם תנאים מעולים.</p>
+                    <span class="font-bold border-b-2 border-indigo-400 pb-1">ללוח הפורשים ←</span>
+                </a>
+            </div>
+
+            <div class="pt-20 border-t border-slate-100">
+                <h4 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-8">השותפים שלנו</h4>
+                <div class="flex flex-wrap justify-center items-center gap-12 opacity-40 grayscale">
+                    <img src="/logo.png" class="h-6">
+                    <span class="text-lg font-black italic">TZEVET - SOUTH</span>
+                    <span class="text-lg font-black italic">IDF VETERANS</span>
+                </div>
+            </div>
+        </main>
+
+        <footer class="py-12 border-t border-slate-50 text-center text-slate-400 text-xs">
+            © 2026 1solution jobs | פותח בגאווה עבור צוות דרום
+        </footer>
+    </body>
+    </html>
+    `;
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+}

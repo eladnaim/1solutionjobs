@@ -1,5 +1,6 @@
 import admin from 'firebase-admin';
 import axios from 'axios';
+import { FacebookGraphService } from './facebookGraph.js';
 
 const db = admin.firestore();
 
@@ -369,7 +370,7 @@ export class TelegramPublisher {
 // ============================================
 
 export class SocialMediaPublisher {
-    private facebook?: FacebookPublisher;
+    private facebookGraph: FacebookGraphService;
     private instagram?: InstagramPublisher;
     private linkedin?: LinkedInPublisher;
     private twitter?: TwitterPublisher;
@@ -377,6 +378,7 @@ export class SocialMediaPublisher {
     private telegram?: TelegramPublisher;
 
     constructor() {
+        this.facebookGraph = new FacebookGraphService();
         // Initialize publishers from environment variables or Firestore config
         this.loadConfig();
     }
@@ -389,18 +391,7 @@ export class SocialMediaPublisher {
 
             // We only enable FB if we have a Page ID and cookies/token
             if (fbDoc.exists && fbDoc.data()?.page_id) {
-                // Note: The original implementation assumed a long-lived token. 
-                // Since we use Puppeteer/Cookies for some things, we might need a hybrid approach.
-                // For now, let's assume the Access Token is stored in settings or we use the cookie-based scraper.
-                // BUT, SocialMediaPublisher uses axios + Graph API. 
-                // We need a Page Access Token. 
-
-                // If the user hasn't provided a Graph API token, we might fail here.
-                // However, for the purpose of fixing the immediate "Mock" issue:
-                const fbData = fbDoc.data();
-                if (fbData?.access_token) {
-                    this.facebook = new FacebookPublisher(fbData.access_token, fbData.page_id);
-                }
+                await this.facebookGraph.initialize();
             }
 
             // Load Telegram Settings
@@ -513,11 +504,15 @@ export class SocialMediaPublisher {
 
                     // A. Page Publishing
                     let pageSuccess = false;
-                    if (this.facebook) {
-                        // Graph API
-                        await this.facebook.publishToPage(request.generated_content, request.job_link);
+                    const fbResult = await this.facebookGraph.publishPost(
+                        request.generated_content || request.content,
+                        request.job_link || request.link
+                    );
+
+                    if (fbResult.success) {
                         pageSuccess = true;
                     } else {
+                        console.log(`[Publisher] Graph API failed, falling back to Puppeteer: ${fbResult.error}`);
                         // Puppeteer Fallback
                         const { FacebookScraper } = await import('./facebookScraper.js');
                         const scraper = new FacebookScraper();
